@@ -5,6 +5,7 @@ import { useFileExport } from './composables/useFileExport'
 import { FileInput } from './components/common'
 import { SubtitleTable } from './components/table'
 import { MainToolbar } from './components/toolbar'
+import { TimelineEditor } from './components/timeline'
 import { parseAss } from './plugins/parser-ass/parser'
 import { parseSrt } from './plugins/parser-srt/parser'
 import { createSubtitleFile } from './core/models/SubtitleFile'
@@ -13,6 +14,7 @@ const store = useSubtitleStore()
 const { exportFile } = useFileExport()
 const fileInputRef = ref<InstanceType<typeof FileInput> | null>(null)
 const errorMessage = ref('')
+const currentView = ref<'table' | 'timeline'>('table')
 
 async function handleFileSelect(file: File) {
   errorMessage.value = ''
@@ -47,14 +49,15 @@ async function handleFileSelect(file: File) {
   }
 }
 
+function handleExportFile() {
+  exportFile()
+}
+
 function handleCloseFile() {
   store.unloadFile()
   fileInputRef.value?.clear()
   errorMessage.value = ''
-}
-
-function handleExport() {
-  exportFile()
+  currentView.value = 'table'
 }
 </script>
 
@@ -80,24 +83,45 @@ function handleExport() {
 
       <!-- File Info Section -->
       <div v-else class="file-info-section">
-        <div class="file-header">
-          <div class="file-details">
-            <h2 class="file-name">{{ store.currentFile?.filename }}</h2>
-            <div class="file-stats">
-              <span class="stat">字幕条数: {{ store.items.length }}</span>
-              <span class="stat">样式数量: {{ store.styles.length }}</span>
-              <span class="stat">格式: {{ store.currentFile?.format.toUpperCase() }}</span>
-            </div>
-          </div>
-          <div class="file-actions">
-            <button class="btn btn-primary" @click="handleExport">导出文件</button>
-            <button class="btn btn-secondary" @click="handleCloseFile">关闭文件</button>
-          </div>
+        <MainToolbar />
+
+        <!-- View Switcher -->
+        <div class="flex border-b border-gray-200">
+          <button
+            class="px-4 py-2 text-sm font-medium"
+            :class="currentView === 'table' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-600 hover:text-gray-800'"
+            @click="currentView = 'table'"
+          >
+            表格视图
+          </button>
+          <button
+            class="px-4 py-2 text-sm font-medium"
+            :class="currentView === 'timeline' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-600 hover:text-gray-800'"
+            @click="currentView = 'timeline'"
+          >
+            时间轴
+          </button>
         </div>
 
-        <!-- Subtitle Table -->
-        <MainToolbar />
-        <SubtitleTable class="subtitle-table-container" />
+        <div class="p-6">
+          <div class="flex justify-between items-center mb-4">
+            <h2 class="text-lg font-semibold">{{ store.currentFile?.filename }}</h2>
+            <div class="flex gap-2">
+              <button class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700" @click="handleExportFile">
+                导出
+              </button>
+              <button class="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300" @click="handleCloseFile">
+                关闭
+              </button>
+            </div>
+          </div>
+
+          <!-- Table View -->
+          <SubtitleTable v-if="currentView === 'table'" class="max-h-96" />
+
+          <!-- Timeline View -->
+          <TimelineEditor v-else :duration="600000" />
+        </div>
       </div>
     </main>
   </div>
