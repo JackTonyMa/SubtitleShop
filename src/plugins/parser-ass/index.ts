@@ -8,13 +8,7 @@ export class AssParserPlugin extends BasePlugin implements ParserPlugin {
   readonly supportedFormats = ['ass', 'ssa']
 
   constructor() {
-    super({
-      id: 'parser-ass',
-      name: 'ASS Parser',
-      version: '1.0.0',
-      description: 'Parse and serialize Advanced SubStation Alpha subtitle files',
-      author: 'SubtitleShop',
-    })
+    super('parser-ass', 'ASS Parser', '1.0.0')
   }
 
   activate(): void {

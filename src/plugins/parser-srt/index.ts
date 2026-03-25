@@ -8,13 +8,7 @@ export class SrtParserPlugin extends BasePlugin implements ParserPlugin {
   readonly supportedFormats = ['srt']
 
   constructor() {
-    super({
-      id: 'parser-srt',
-      name: 'SRT Parser',
-      version: '1.0.0',
-      description: 'Parse and serialize SubRip subtitle files',
-      author: 'SubtitleShop',
-    })
+    super('parser-srt', 'SRT Parser', '1.0.0')
   }
 
   activate(): void {

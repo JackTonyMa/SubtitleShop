@@ -7,12 +7,6 @@ interface AssScriptInfo {
   [key: string]: string
 }
 
-interface ParsedAss {
-  scriptInfo: AssScriptInfo
-  styles: AssStyle[]
-  items: SubtitleItem[]
-}
-
 export function parseAss(content: string): Omit<SubtitleFileParams, 'filename' | 'format'> {
   const lines = content.split(/\r?\n/)
 
