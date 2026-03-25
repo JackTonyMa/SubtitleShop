@@ -4,6 +4,7 @@ import { useSubtitleStore } from './stores/subtitle'
 import { useFileExport } from './composables/useFileExport'
 import { FileInput } from './components/common'
 import { SubtitleTable } from './components/table'
+import { MainToolbar } from './components/toolbar'
 import { parseAss } from './plugins/parser-ass/parser'
 import { parseSrt } from './plugins/parser-srt/parser'
 import { createSubtitleFile } from './core/models/SubtitleFile'
@@ -95,6 +96,7 @@ function handleExport() {
         </div>
 
         <!-- Subtitle Table -->
+        <MainToolbar />
         <SubtitleTable class="subtitle-table-container" />
       </div>
     </main>
