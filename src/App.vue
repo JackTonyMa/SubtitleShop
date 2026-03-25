@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { useSubtitleStore } from './stores/subtitle'
 import { useFileExport } from './composables/useFileExport'
+import { useKeyboardShortcuts } from './composables/useKeyboardShortcuts'
 import { FileInput } from './components/common'
 import { SubtitleTable } from './components/table'
 import { MainToolbar } from './components/toolbar'
@@ -12,6 +13,7 @@ import { createSubtitleFile } from './core/models/SubtitleFile'
 
 const store = useSubtitleStore()
 const { exportFile } = useFileExport()
+useKeyboardShortcuts()
 const fileInputRef = ref<InstanceType<typeof FileInput> | null>(null)
 const errorMessage = ref('')
 const currentView = ref<'table' | 'timeline'>('table')
