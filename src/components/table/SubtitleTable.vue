@@ -5,6 +5,10 @@ import type { SubtitleItem } from '../../core/models/SubtitleItem'
 
 const store = useSubtitleStore()
 
+function getStyleName(styleName: string | undefined): string {
+  return styleName || 'Default'
+}
+
 function handleSelect(id: string, event: MouseEvent) {
   const multi = event.ctrlKey || event.metaKey
   if (store.isSelected(id) && multi) {
@@ -28,6 +32,7 @@ function handleUpdate(id: string, updates: Partial<SubtitleItem>) {
           <th class="px-4 py-2 text-left font-semibold text-gray-700 w-32">开始时间</th>
           <th class="px-4 py-2 text-left font-semibold text-gray-700 w-32">结束时间</th>
           <th class="px-4 py-2 text-left font-semibold text-gray-700 w-24">时长</th>
+          <th class="px-4 py-2 text-left font-semibold text-gray-700 w-32">样式</th>
           <th class="px-4 py-2 text-left font-semibold text-gray-700">文本</th>
         </tr>
       </thead>
@@ -38,6 +43,7 @@ function handleUpdate(id: string, updates: Partial<SubtitleItem>) {
           :index="index + 1"
           :item="item"
           :is-selected="store.isSelected(item.id)"
+          :style-name="getStyleName(item.style)"
           @select="(e) => handleSelect(item.id, e)"
           @update="(updates) => handleUpdate(item.id, updates)"
         />

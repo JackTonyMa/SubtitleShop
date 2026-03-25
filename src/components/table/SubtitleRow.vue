@@ -8,6 +8,7 @@ const props = defineProps<{
   index: number
   item: SubtitleItem
   isSelected: boolean
+  styleName: string
 }>()
 
 const emit = defineEmits<{
@@ -65,6 +66,9 @@ function handleEndTimeUpdate(newValue: number) {
     </td>
     <td class="px-4 py-2 text-gray-600 font-mono text-xs">
       {{ durationFormatted }}
+    </td>
+    <td class="px-4 py-2 text-gray-600 text-xs">
+      {{ styleName }}
     </td>
     <td class="px-4 py-2">
       <TextCell

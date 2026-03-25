@@ -7,6 +7,7 @@ import { FileInput } from './components/common'
 import { SubtitleTable } from './components/table'
 import { MainToolbar } from './components/toolbar'
 import { TimelineEditor } from './components/timeline'
+import { StyleEditor } from './components/style-editor'
 import { parseAss } from './plugins/parser-ass/parser'
 import { parseSrt } from './plugins/parser-srt/parser'
 import { createSubtitleFile } from './core/models/SubtitleFile'
@@ -16,7 +17,7 @@ const { exportFile } = useFileExport()
 useKeyboardShortcuts()
 const fileInputRef = ref<InstanceType<typeof FileInput> | null>(null)
 const errorMessage = ref('')
-const currentView = ref<'table' | 'timeline'>('table')
+const currentView = ref<'table' | 'timeline' | 'styles'>('table')
 
 async function handleFileSelect(file: File) {
   errorMessage.value = ''
@@ -103,6 +104,13 @@ function handleCloseFile() {
           >
             时间轴
           </button>
+          <button
+            class="px-4 py-2 text-sm font-medium"
+            :class="currentView === 'styles' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-600 hover:text-gray-800'"
+            @click="currentView = 'styles'"
+          >
+            样式
+          </button>
         </div>
 
         <div class="p-6">
@@ -122,7 +130,10 @@ function handleCloseFile() {
           <SubtitleTable v-if="currentView === 'table'" class="max-h-96" />
 
           <!-- Timeline View -->
-          <TimelineEditor v-else :duration="600000" />
+          <TimelineEditor v-else-if="currentView === 'timeline'" :duration="600000" />
+
+          <!-- Styles View -->
+          <StyleEditor v-else-if="currentView === 'styles'" />
         </div>
       </div>
     </main>
