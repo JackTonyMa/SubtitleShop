@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { useSubtitleStore } from './stores/subtitle'
 import { useFileExport } from './composables/useFileExport'
 import { FileInput } from './components/common'
+import { SubtitleTable } from './components/table'
 import { parseAss } from './plugins/parser-ass/parser'
 import { parseSrt } from './plugins/parser-srt/parser'
 import { createSubtitleFile } from './core/models/SubtitleFile'
@@ -93,29 +94,8 @@ function handleExport() {
           </div>
         </div>
 
-        <!-- Subtitle List -->
-        <div class="subtitle-list">
-          <h3 class="list-title">字幕列表</h3>
-          <div v-if="store.items.length === 0" class="empty-state">
-            暂无字幕数据
-          </div>
-          <ul v-else class="list">
-            <li
-              v-for="item in store.items"
-              :key="item.id"
-              class="list-item"
-              :class="{ selected: store.isSelected(item.id) }"
-              @click="store.selectItem(item.id)"
-            >
-              <span class="item-time">
-                {{ new Date(item.startTime).toISOString().substr(11, 12).replace('.', ',') }}
-                -->
-                {{ new Date(item.endTime).toISOString().substr(11, 12).replace('.', ',') }}
-              </span>
-              <span class="item-text">{{ item.text }}</span>
-            </li>
-          </ul>
-        </div>
+        <!-- Subtitle Table -->
+        <SubtitleTable class="subtitle-table-container" />
       </div>
     </main>
   </div>
@@ -287,9 +267,8 @@ function handleExport() {
   font-family: monospace;
 }
 
-.item-text {
-  font-size: 0.875rem;
-  color: #333;
-  white-space: pre-wrap;
+.subtitle-table-container {
+  margin-top: 1rem;
+  max-height: 600px;
 }
 </style>

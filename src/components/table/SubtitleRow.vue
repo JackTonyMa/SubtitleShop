@@ -3,7 +3,6 @@ import { computed } from 'vue'
 import TimeCell from './TimeCell.vue'
 import TextCell from './TextCell.vue'
 import type { SubtitleItem } from '../../core/models/SubtitleItem'
-import { msToAssTime } from '../../utils/time'
 
 const props = defineProps<{
   index: number
