@@ -1,0 +1,91 @@
+<h2>设计总结</h2>
+<p class="subtitle">SubtitleShop 完整设计概览</p>
+
+<div class="section">
+  <h3>项目概述</h3>
+  <div class="mockup">
+    <div class="mockup-body" style="background: #161b22; color: #c9d1d9; padding: 20px;">
+      <table style="width: 100%; font-size: 12px;">
+        <tr><td style="color: #8b949e; width: 120px;">项目名称</td><td>SubtitleShop</td></tr>
+        <tr><td style="color: #8b949e;">应用类型</td><td>Web 应用</td></tr>
+        <tr><td style="color: #8b949e;">目标用户</td><td>字幕爱好者 / 开源贡献者</td></tr>
+        <tr><td style="color: #8b949e;">技术栈</td><td>Vue 3 + TypeScript + Vite + Pinia + Tailwind CSS</td></tr>
+        <tr><td style="color: #8b949e;">架构模式</td><td>模块化插件架构</td></tr>
+        <tr><td style="color: #8b949e;">数据存储</td><td>纯本地 (IndexedDB)</td></tr>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>核心功能</h3>
+  <div class="cards">
+    <div class="card"><div class="card-body"><h4>格式支持</h4><p>ASS / SRT 解析与导出</p></div></div>
+    <div class="card"><div class="card-body"><h4>时间轴编辑</h4><p>可视化拖拽调整</p></div></div>
+    <div class="card"><div class="card-body"><h4>列表编辑</h4><p>传统表格视图</p></div></div>
+    <div class="card"><div class="card-body"><h4>样式编辑</h4><p>完整 ASS 样式支持</p></div></div>
+    <div class="card"><div class="card-body"><h4>格式转换</h4><p>ASS ↔ SRT 双向转换</p></div></div>
+    <div class="card"><div class="card-body"><h4>操作历史</h4><p>撤销 / 重做支持</p></div></div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>模块划分</h3>
+  <div class="mockup">
+    <div class="mockup-body" style="background: #0d1117; color: #c9d1d9; padding: 16px; font-family: monospace; font-size: 11px;">
+<pre style="margin: 0;">
+src/
+├── core/                    # 核心引擎
+│   ├── models/              # 数据模型 (SubtitleItem, AssStyle, etc.)
+│   ├── history/             # 操作历史管理
+│   └── plugins/             # 插件系统
+├── plugins/                 # 官方插件
+│   ├── parser-ass/          # ASS 解析器插件
+│   ├── parser-srt/          # SRT 解析器插件
+│   ├── exporter/            # 导出插件
+│   └── converter/           # 格式转换插件
+├── components/              # Vue 组件
+│   ├── timeline/            # 时间轴组件
+│   ├── table/               # 表格编辑组件
+│   ├── style-editor/        # 样式编辑器组件
+│   └── common/              # 通用组件
+├── stores/                  # Pinia 状态管理
+├── composables/             # Vue 组合式函数
+├── utils/                   # 工具函数
+└── App.vue                  # 应用入口
+</pre>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>开发阶段（建议）</h3>
+  <ol style="font-size: 12px; color: #8b949e;">
+    <li><strong>Phase 1 - 基础框架：</strong>项目搭建、插件系统、数据模型、ASS/SRT 解析器</li>
+    <li><strong>Phase 2 - 核心编辑：</strong>表格视图、时间轴编辑器、基础操作</li>
+    <li><strong>Phase 3 - 样式系统：</strong>ASS 样式编辑器、样式管理、实时预览</li>
+    <li><strong>Phase 4 - 高级功能：</strong>格式转换、撤销/重做、快捷键</li>
+    <li><strong>Phase 5 - 打磨优化：</strong>性能优化、测试、文档、国际化</li>
+  </ol>
+</div>
+
+<div class="section">
+  <h3>设计确认</h3>
+  <p>以上是 SubtitleShop 的完整设计。确认后将生成详细的设计文档。</p>
+  <div class="options">
+    <div class="option" data-choice="approve" onclick="toggleSelect(this)">
+      <div class="letter">A</div>
+      <div class="content">
+        <h3>确认，生成设计文档</h3>
+        <p>设计没问题，继续</p>
+      </div>
+    </div>
+    <div class="option" data-choice="revise" onclick="toggleSelect(this)">
+      <div class="letter">B</div>
+      <div class="content">
+        <h3>需要调整</h3>
+        <p>还有想法要讨论</p>
+      </div>
+    </div>
+  </div>
+</div>

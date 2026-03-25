@@ -1,0 +1,90 @@
+<h2>样式模板系统设计</h2>
+<p class="subtitle">完整的样式管理功能</p>
+
+<div class="section">
+  <h3>预设样式库</h3>
+  <div class="cards" style="grid-template-columns: repeat(3, 1fr);">
+    <div class="card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+      <div class="card-body">
+        <h4 style="color: #fff;">动漫风格</h4>
+        <p style="color: rgba(255,255,255,0.8); font-size: 11px;">明亮色彩、描边阴影、底部居中</p>
+      </div>
+    </div>
+    <div class="card" style="background: linear-gradient(135deg, #434343 0%, #000000 100%);">
+      <div class="card-body">
+        <h4 style="color: #fff;">电影风格</h4>
+        <p style="color: rgba(255,255,255,0.8); font-size: 11px;">简洁白色、细边框、底部居中</p>
+      </div>
+    </div>
+    <div class="card" style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);">
+      <div class="card-body">
+        <h4 style="color: #fff;">纪录片风格</h4>
+        <p style="color: rgba(255,255,255,0.8); font-size: 11px;">专业字体、适中大小、底部左对齐</p>
+      </div>
+    </div>
+    <div class="card" style="background: linear-gradient(135deg, #ee0979 0%, #ff6a00 100%);">
+      <div class="card-body">
+        <h4 style="color: #fff;">卡拉OK风格</h4>
+        <p style="color: rgba(255,255,255,0.8); font-size: 11px;">双色歌词、高亮效果</p>
+      </div>
+    </div>
+    <div class="card" style="background: linear-gradient(135deg, #fafafa 0%, #d4d4d4 100%);">
+      <div class="card-body">
+        <h4 style="color: #333;">极简风格</h4>
+        <p style="color: #666; font-size: 11px;">无边框、纯色、居中</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>样式模板功能</h3>
+  <ul>
+    <li><strong>创建样式：</strong>新建空白样式或基于现有样式复制</li>
+    <li><strong>编辑样式：</strong>修改样式属性，实时预览效果</li>
+    <li><strong>删除样式：</strong>删除未使用的样式</li>
+    <li><strong>应用样式：</strong>为字幕条目指定样式</li>
+    <li><strong>导出样式：</strong>将样式导出为 <code>.ass-style.json</code> 文件</li>
+    <li><strong>导入样式：</strong>从文件导入样式到当前项目</li>
+  </ul>
+</div>
+
+<div class="section">
+  <h3>样式文件格式</h3>
+  <div class="mockup">
+    <div class="mockup-body" style="background: #1a1a2e; color: #eee; padding: 16px; font-family: monospace; font-size: 11px;">
+<pre style="margin: 0;">
+{
+  "version": "1.0",
+  "name": "我的样式包",
+  "author": "用户名",
+  "styles": [
+    { "name": "Title", "fontName": "Arial", "fontSize": 36, ... },
+    { "name": "Dialogue", "fontName": "微软雅黑", "fontSize": 24, ... }
+  ],
+  "createdAt": 1711344000000
+}
+</pre>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>样式模板系统是否满足需求？</h3>
+  <div class="options">
+    <div class="option" data-choice="approve" onclick="toggleSelect(this)">
+      <div class="letter">A</div>
+      <div class="content">
+        <h3>确认，开始实现规划</h3>
+        <p>样式系统没问题</p>
+      </div>
+    </div>
+    <div class="option" data-choice="revise" onclick="toggleSelect(this)">
+      <div class="letter">B</div>
+      <div class="content">
+        <h3>需要调整</h3>
+        <p>还有其他想法</p>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,31 @@
+{
+  "name": "subtitleshop-temp",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc -b && vite build",
+    "preview": "vite preview",
+    "test": "vitest",
+    "test:ui": "vitest --ui"
+  },
+  "dependencies": {
+    "autoprefixer": "^10.4.20",
+    "localforage": "^1.10.0",
+    "pinia": "^3.0.4",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.15",
+    "vue": "^3.5.12"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@vitejs/plugin-vue": "^5.1.4",
+    "@vue/test-utils": "^2.4.6",
+    "jsdom": "^26.1.0",
+    "typescript": "~5.6.2",
+    "vite": "^5.4.10",
+    "vitest": "^3.2.4",
+    "vue-tsc": "^2.1.8"
+  }
+}

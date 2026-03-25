@@ -1,0 +1,121 @@
+<h2>UI 布局设计</h2>
+<p class="subtitle">主界面布局方案</p>
+
+<div class="section">
+  <h3>主界面布局</h3>
+  <div class="mockup">
+    <div class="mockup-header">SubtitleShop 主界面</div>
+    <div class="mockup-body" style="background: #0d1117; color: #c9d1d9; padding: 0; font-size: 11px;">
+      <div style="display: flex; height: 500px;">
+        <!-- 左侧边栏 -->
+        <div style="width: 200px; background: #161b22; border-right: 1px solid #30363d; padding: 12px;">
+          <div style="color: #8b949e; font-size: 10px; text-transform: uppercase; margin-bottom: 8px;">文件</div>
+          <div style="background: #21262d; padding: 6px 8px; border-radius: 4px; margin-bottom: 4px;">📁 movie.ass</div>
+          <div style="background: #21262d; padding: 6px 8px; border-radius: 4px; opacity: 0.6;">📁 episode01.srt</div>
+          <div style="margin-top: 16px; color: #8b949e; font-size: 10px; text-transform: uppercase; margin-bottom: 8px;">样式</div>
+          <div style="background: #238636; padding: 6px 8px; border-radius: 4px; margin-bottom: 4px;">Default</div>
+          <div style="background: #21262d; padding: 6px 8px; border-radius: 4px;">Title</div>
+          <div style="background: #21262d; padding: 6px 8px; border-radius: 4px;">Dialogue</div>
+        </div>
+        <!-- 主编辑区 -->
+        <div style="flex: 1; display: flex; flex-direction: column;">
+          <!-- 工具栏 -->
+          <div style="background: #161b22; padding: 8px 12px; border-bottom: 1px solid #30363d; display: flex; gap: 8px; align-items: center;">
+            <button style="background: #21262d; border: 1px solid #30363d; color: #c9d1d9; padding: 4px 10px; border-radius: 4px;">导入</button>
+            <button style="background: #21262d; border: 1px solid #30363d; color: #c9d1d9; padding: 4px 10px; border-radius: 4px;">导出</button>
+            <span style="color: #30363d;">|</span>
+            <button style="background: #21262d; border: 1px solid #30363d; color: #c9d1d9; padding: 4px 10px; border-radius: 4px;">↶</button>
+            <button style="background: #21262d; border: 1px solid #30363d; color: #c9d1d9; padding: 4px 10px; border-radius: 4px;">↷</button>
+            <span style="color: #30363d;">|</span>
+            <button style="background: #238636; border: none; color: white; padding: 4px 10px; border-radius: 4px;">+ 添加字幕</button>
+            <div style="flex: 1;"></div>
+            <button style="background: #21262d; border: 1px solid #30363d; color: #c9d1d9; padding: 4px 10px; border-radius: 4px;">时间轴</button>
+            <button style="background: #21262d; border: 1px solid #30363d; color: #c9d1d9; padding: 4px 10px; border-radius: 4px;">列表</button>
+          </div>
+          <!-- 时间轴区域 -->
+          <div style="background: #0d1117; height: 180px; border-bottom: 1px solid #30363d; position: relative;">
+            <div style="position: absolute; top: 0; left: 0; right: 0; height: 24px; background: #161b22; display: flex; align-items: center; padding: 0 8px; font-size: 10px; color: #8b949e;">
+              <span style="margin-right: 60px;">00:00</span>
+              <span style="margin-right: 60px;">00:05</span>
+              <span style="margin-right: 60px;">00:10</span>
+              <span style="margin-right: 60px;">00:15</span>
+              <span>00:20</span>
+            </div>
+            <div style="position: absolute; top: 30px; left: 40px; width: 120px; height: 40px; background: #1f6feb; border-radius: 4px; display: flex; align-items: center; padding: 0 8px; font-size: 11px;">你好世界</div>
+            <div style="position: absolute; top: 80px; left: 180px; width: 150px; height: 40px; background: #8957e5; border-radius: 4px; display: flex; align-items: center; padding: 0 8px; font-size: 11px;">欢迎来到字幕编辑器</div>
+            <div style="position: absolute; top: 130px; left: 350px; width: 100px; height: 40px; background: #1f6feb; border-radius: 4px; display: flex; align-items: center; padding: 0 8px; font-size: 11px;">测试字幕</div>
+            <!-- 播放头 -->
+            <div style="position: absolute; top: 24px; left: 200px; width: 2px; height: 156px; background: #f85149;"></div>
+          </div>
+          <!-- 字幕列表 -->
+          <div style="flex: 1; overflow: auto; background: #0d1117;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+              <thead style="background: #161b22; position: sticky; top: 0;">
+                <tr>
+                  <th style="text-align: left; padding: 8px; border-bottom: 1px solid #30363d; color: #8b949e; width: 50px;">#</th>
+                  <th style="text-align: left; padding: 8px; border-bottom: 1px solid #30363d; color: #8b949e; width: 100px;">开始时间</th>
+                  <th style="text-align: left; padding: 8px; border-bottom: 1px solid #30363d; color: #8b949e; width: 100px;">结束时间</th>
+                  <th style="text-align: left; padding: 8px; border-bottom: 1px solid #30363d; color: #8b949e; width: 80px;">样式</th>
+                  <th style="text-align: left; padding: 8px; border-bottom: 1px solid #30363d; color: #8b949e;">文本</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr style="background: #21262d;">
+                  <td style="padding: 8px; border-bottom: 1px solid #30363d;">1</td>
+                  <td style="padding: 8px; border-bottom: 1px solid #30363d; font-family: monospace;">00:00:01.00</td>
+                  <td style="padding: 8px; border-bottom: 1px solid #30363d; font-family: monospace;">00:00:03.50</td>
+                  <td style="padding: 8px; border-bottom: 1px solid #30363d;"><span style="background: #1f6feb; padding: 2px 6px; border-radius: 3px; font-size: 10px;">Default</span></td>
+                  <td style="padding: 8px; border-bottom: 1px solid #30363d;">你好世界</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px; border-bottom: 1px solid #30363d;">2</td>
+                  <td style="padding: 8px; border-bottom: 1px solid #30363d; font-family: monospace;">00:00:04.00</td>
+                  <td style="padding: 8px; border-bottom: 1px solid #30363d; font-family: monospace;">00:00:07.00</td>
+                  <td style="padding: 8px; border-bottom: 1px solid #30363d;"><span style="background: #8957e5; padding: 2px 6px; border-radius: 3px; font-size: 10px;">Title</span></td>
+                  <td style="padding: 8px; border-bottom: 1px solid #30363d;">欢迎来到字幕编辑器</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px; border-bottom: 1px solid #30363d;">3</td>
+                  <td style="padding: 8px; border-bottom: 1px solid #30363d; font-family: monospace;">00:00:08.00</td>
+                  <td style="padding: 8px; border-bottom: 1px solid #30363d; font-family: monospace;">00:00:10.00</td>
+                  <td style="padding: 8px; border-bottom: 1px solid #30363d;"><span style="background: #1f6feb; padding: 2px 6px; border-radius: 3px; font-size: 10px;">Default</span></td>
+                  <td style="padding: 8px; border-bottom: 1px solid #30363d;">测试字幕</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>布局说明</h3>
+  <ul>
+    <li><strong>左侧边栏：</strong>文件列表 + 样式列表，可折叠</li>
+    <li><strong>工具栏：</strong>导入/导出、撤销/重做、添加字幕、视图切换</li>
+    <li><strong>时间轴：</strong>可视化字幕块，可拖拽、缩放、多轨道</li>
+    <li><strong>字幕列表：</strong>表格视图，直接编辑时间和文本</li>
+  </ul>
+</div>
+
+<div class="section">
+  <h3>UI 布局是否满意？</h3>
+  <div class="options">
+    <div class="option" data-choice="next" onclick="toggleSelect(this)">
+      <div class="letter">A</div>
+      <div class="content">
+        <h3>继续看样式编辑器</h3>
+        <p>布局没问题</p>
+      </div>
+    </div>
+    <div class="option" data-choice="revise" onclick="toggleSelect(this)">
+      <div class="letter">B</div>
+      <div class="content">
+        <h3>需要调整</h3>
+        <p>有其他想法</p>
+      </div>
+    </div>
+  </div>
+</div>

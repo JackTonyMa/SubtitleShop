@@ -1,0 +1,85 @@
+<h2>格式转换设计</h2>
+<p class="subtitle">ASS ↔ SRT 双向转换</p>
+
+<div class="section">
+  <h3>转换流程</h3>
+  <div class="mockup">
+    <div class="mockup-header">格式转换对话框</div>
+    <div class="mockup-body" style="background: #161b22; color: #c9d1d9; padding: 20px; font-size: 12px;">
+      <div style="max-width: 400px; margin: 0 auto;">
+        <h4 style="margin: 0 0 16px;">导出 / 转换格式</h4>
+        <div style="margin-bottom: 16px;">
+          <label style="display: block; font-size: 11px; color: #8b949e; margin-bottom: 8px;">目标格式</label>
+          <div style="display: flex; gap: 8px;">
+            <button style="flex: 1; background: #238636; border: none; color: white; padding: 12px; border-radius: 4px;">.ass</button>
+            <button style="flex: 1; background: #21262d; border: 1px solid #30363d; color: #c9d1d9; padding: 12px; border-radius: 4px;">.srt</button>
+          </div>
+        </div>
+        <div style="background: #21262d; padding: 12px; border-radius: 4px; margin-bottom: 16px; border-left: 3px solid #f0883e;">
+          <div style="font-size: 11px; color: #f0883e; margin-bottom: 4px;">⚠️ 转换提示</div>
+          <div style="font-size: 11px; color: #8b949e;">SRT 不支持 ASS 样式，样式信息将丢失。文本中的 ASS 标签将被清除。</div>
+        </div>
+        <div style="margin-bottom: 16px;">
+          <label style="display: flex; align-items: center; gap: 8px; font-size: 11px; color: #c9d1d9;">
+            <input type="checkbox" checked style="width: 16px; height: 16px;">
+            清除文本中的 ASS 标签（{\an8}、{\b1} 等）
+          </label>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button style="flex: 1; background: #21262d; border: 1px solid #30363d; color: #c9d1d9; padding: 10px; border-radius: 4px;">取消</button>
+          <button style="flex: 1; background: #238636; border: none; color: white; padding: 10px; border-radius: 4px;">导出</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>转换规则</h3>
+  <div class="cards" style="grid-template-columns: 1fr 1fr;">
+    <div class="card">
+      <div class="card-body">
+        <h4>ASS → SRT</h4>
+        <ul style="margin: 0; padding-left: 16px; font-size: 11px; color: #8b949e;">
+          <li>时间格式转换 (h:mm:ss.cc → h:mm:ss,mmm)</li>
+          <li>移除所有样式定义</li>
+          <li>清除文本中的 ASS 标签</li>
+          <li>保留纯文本和换行符</li>
+          <li>显示警告提示样式丢失</li>
+        </ul>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-body">
+        <h4>SRT → ASS</h4>
+        <ul style="margin: 0; padding-left: 16px; font-size: 11px; color: #8b949e;">
+          <li>时间格式转换 (h:mm:ss,mmm → h:mm:ss.cc)</li>
+          <li>自动创建 Default 样式</li>
+          <li>保留纯文本和换行符</li>
+          <li>生成标准 ASS 文件头</li>
+          <li>用户可后续编辑样式</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>格式转换设计是否合理？</h3>
+  <div class="options">
+    <div class="option" data-choice="next" onclick="toggleSelect(this)">
+      <div class="letter">A</div>
+      <div class="content">
+        <h3>查看完整设计总结</h3>
+        <p>继续</p>
+      </div>
+    </div>
+    <div class="option" data-choice="revise" onclick="toggleSelect(this)">
+      <div class="letter">B</div>
+      <div class="content">
+        <h3>需要调整</h3>
+        <p>有其他想法</p>
+      </div>
+    </div>
+  </div>
+</div>
