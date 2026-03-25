@@ -9,8 +9,6 @@ export interface Project {
   name: string
   files: SubtitleFile[]
   settings: ProjectSettings
-  createdAt: number
-  updatedAt: number
 }
 
 export interface ProjectParams {
@@ -20,14 +18,11 @@ export interface ProjectParams {
 }
 
 export function createProject(params: ProjectParams): Project {
-  const now = Date.now()
   return {
     id: generateId(),
     name: params.name,
     files: params.files ?? [],
     settings: params.settings ?? {},
-    createdAt: now,
-    updatedAt: now,
   }
 }
 

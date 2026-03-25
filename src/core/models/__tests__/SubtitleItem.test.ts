@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { SubtitleItem, createSubtitleItem } from '../SubtitleItem'
+import { createSubtitleItem } from '../SubtitleItem'
 
 describe('SubtitleItem', () => {
   it('should create a subtitle item with default values', () => {

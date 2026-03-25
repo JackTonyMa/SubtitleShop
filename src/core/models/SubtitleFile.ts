@@ -1,23 +1,23 @@
 import { SubtitleItem } from './SubtitleItem'
 import { AssStyle } from './AssStyle'
 
-export type SubtitleFormat = 'ass' | 'ssa' | 'srt' | 'vtt'
-
 export interface SubtitleFile {
   id: string
   filename: string
-  format: SubtitleFormat
+  format: 'ass' | 'srt'
   items: SubtitleItem[]
   styles: AssStyle[]
+  scriptInfo?: Record<string, string>
   createdAt: number
   updatedAt: number
 }
 
 export interface SubtitleFileParams {
   filename: string
-  format: SubtitleFormat
+  format: 'ass' | 'srt'
   items?: SubtitleItem[]
   styles?: AssStyle[]
+  scriptInfo?: Record<string, string>
 }
 
 export function createSubtitleFile(params: SubtitleFileParams): SubtitleFile {
@@ -28,6 +28,7 @@ export function createSubtitleFile(params: SubtitleFileParams): SubtitleFile {
     format: params.format,
     items: params.items ?? [],
     styles: params.styles ?? [],
+    scriptInfo: params.scriptInfo,
     createdAt: now,
     updatedAt: now,
   }

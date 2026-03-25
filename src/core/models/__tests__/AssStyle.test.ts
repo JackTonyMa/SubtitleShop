@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { AssStyle, createDefaultStyle, createAssStyle } from '../AssStyle'
+import { createDefaultStyle, createAssStyle } from '../AssStyle'
 
 describe('AssStyle', () => {
   it('should create default style', () => {

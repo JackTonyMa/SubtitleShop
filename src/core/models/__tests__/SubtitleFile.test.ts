@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { SubtitleFile, createSubtitleFile } from '../SubtitleFile'
+import { createSubtitleFile } from '../SubtitleFile'
 import { createSubtitleItem } from '../SubtitleItem'
 
 describe('SubtitleFile', () => {

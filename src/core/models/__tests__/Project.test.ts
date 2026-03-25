@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { Project, createProject } from '../Project'
+import { createProject } from '../Project'
 
 describe('Project', () => {
   it('should create empty project', () => {
