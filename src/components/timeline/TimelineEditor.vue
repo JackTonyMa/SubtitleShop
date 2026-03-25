@@ -216,4 +216,3 @@ function formatTime(ms: number): string {
   cursor: ew-resize;
 }
 </style>
-</content>
