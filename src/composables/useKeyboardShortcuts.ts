@@ -15,6 +15,20 @@ export function useKeyboardShortcuts() {
       return
     }
 
+    // Ctrl+Z - Undo
+    if (matchesShortcut(event, KeyboardShortcuts.UNDO)) {
+      event.preventDefault()
+      store.undo()
+      return
+    }
+
+    // Ctrl+Y - Redo
+    if (matchesShortcut(event, KeyboardShortcuts.REDO)) {
+      event.preventDefault()
+      store.redo()
+      return
+    }
+
     // Ctrl+N - New subtitle
     if (matchesShortcut(event, KeyboardShortcuts.NEW_SUBTITLE)) {
       event.preventDefault()
@@ -28,12 +42,17 @@ export function useKeyboardShortcuts() {
       return
     }
 
+    // Ctrl+D - Duplicate selected
+    if (matchesShortcut(event, KeyboardShortcuts.DUPLICATE)) {
+      event.preventDefault()
+      store.duplicateSelected()
+      return
+    }
+
     // Delete - Delete selected
     if (matchesShortcut(event, KeyboardShortcuts.DELETE_SUBTITLE)) {
       event.preventDefault()
-      const ids = Array.from(store.selectedIds)
-      ids.forEach(id => store.removeItem(id))
-      store.clearSelection()
+      store.deleteSelected()
       return
     }
 

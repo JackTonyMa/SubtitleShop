@@ -4,6 +4,8 @@ import type { SubtitleFile } from '../core/models/SubtitleFile'
 import type { SubtitleItem } from '../core/models/SubtitleItem'
 import type { AssStyle } from '../core/models/AssStyle'
 import { createSubtitleItem, createDefaultStyle } from '../core/models'
+import { HistoryManager } from '../core/history/HistoryManager'
+import { AddSubtitleCommand, DeleteSubtitleCommand, UpdateSubtitleCommand } from '../core/history/commands'
 
 export const useSubtitleStore = defineStore('subtitle', () => {
   // State
@@ -11,6 +13,7 @@ export const useSubtitleStore = defineStore('subtitle', () => {
   const items = ref<SubtitleItem[]>([])
   const styles = ref<AssStyle[]>([])
   const selectedIds = ref<Set<string>>(new Set())
+  const history = new HistoryManager()
 
   // Getters
   const hasFile = computed(() => currentFile.value !== null)
@@ -22,6 +25,9 @@ export const useSubtitleStore = defineStore('subtitle', () => {
   const isSelected = computed(() => {
     return (id: string) => selectedIds.value.has(id)
   })
+
+  const canUndo = computed(() => history.canUndo())
+  const canRedo = computed(() => history.canRedo())
 
   // Actions
   function loadFile(file: SubtitleFile) {
@@ -39,26 +45,72 @@ export const useSubtitleStore = defineStore('subtitle', () => {
   }
 
   function addItem(params: Omit<SubtitleItem, 'id'>) {
-    const newItem = createSubtitleItem(params)
-    items.value.push(newItem)
-    // Sort items by start time
-    items.value.sort((a, b) => a.startTime - b.startTime)
-    return newItem
+    const command = new AddSubtitleCommand({
+      item: params,
+      addFn: (item) => {
+        const newItem = createSubtitleItem(item)
+        items.value.push(newItem)
+        items.value.sort((a, b) => a.startTime - b.startTime)
+        return newItem
+      },
+      removeFn: (id: string) => {
+        const index = items.value.findIndex(item => item.id === id)
+        if (index !== -1) {
+          items.value.splice(index, 1)
+          selectedIds.value.delete(id)
+        }
+      }
+    })
+    return history.execute(command)
   }
 
   function removeItem(id: string) {
-    const index = items.value.findIndex(item => item.id === id)
-    if (index !== -1) {
-      items.value.splice(index, 1)
-      selectedIds.value.delete(id)
-    }
+    const item = items.value.find(item => item.id === id)
+    if (!item) return false
+
+    const command = new DeleteSubtitleCommand({
+      item,
+      removeFn: (id: string) => {
+        const index = items.value.findIndex(item => item.id === id)
+        if (index !== -1) {
+          items.value.splice(index, 1)
+          selectedIds.value.delete(id)
+        }
+      },
+      addFn: (item) => {
+        const newItem = createSubtitleItem(item)
+        items.value.push(newItem)
+        items.value.sort((a, b) => a.startTime - b.startTime)
+        return newItem
+      }
+    })
+    return history.execute(command)
   }
 
   function updateItem(id: string, updates: Partial<SubtitleItem>) {
     const item = items.value.find(item => item.id === id)
-    if (item) {
-      Object.assign(item, updates)
+    if (!item) return false
+
+    const oldValues: Partial<SubtitleItem> = {}
+    for (const key in updates) {
+      if (key in item) {
+        (oldValues as Record<string, unknown>)[key] = (item as Record<string, unknown>)[key]
+      }
     }
+
+    const command = new UpdateSubtitleCommand({
+      id,
+      oldValues,
+      newValues: updates,
+      updateFn: (id: string, updates: Partial<SubtitleItem>) => {
+        const item = items.value.find(item => item.id === id)
+        if (item) {
+          Object.assign(item, updates)
+        }
+      },
+      getItemFn: (id: string) => items.value.find(item => item.id === id)
+    })
+    return history.execute(command)
   }
 
   function selectItem(id: string, multi = false) {
@@ -74,6 +126,96 @@ export const useSubtitleStore = defineStore('subtitle', () => {
 
   function clearSelection() {
     selectedIds.value.clear()
+  }
+
+  function undo() {
+    return history.undo()
+  }
+
+  function redo() {
+    return history.redo()
+  }
+
+  function deleteSelected() {
+    const ids = Array.from(selectedIds.value)
+    ids.forEach(id => removeItem(id))
+    clearSelection()
+  }
+
+  function shiftTime(offset: number) {
+    const ids = Array.from(selectedIds.value)
+    ids.forEach(id => {
+      const item = items.value.find(item => item.id === id)
+      if (item) {
+        updateItem(id, {
+          startTime: Math.max(0, item.startTime + offset),
+          endTime: Math.max(0, item.endTime + offset)
+        })
+      }
+    })
+  }
+
+  function mergeSelected() {
+    const selected = selectedItems.value
+    if (selected.length < 2) return
+
+    // Sort by start time
+    selected.sort((a, b) => a.startTime - b.startTime)
+
+    const first = selected[0]
+    const last = selected[selected.length - 1]
+    const mergedText = selected.map(s => s.text).join(' ')
+
+    // Create merged item
+    addItem({
+      startTime: first.startTime,
+      endTime: last.endTime,
+      text: mergedText,
+      style: first.style
+    })
+
+    // Delete original items
+    selected.forEach(item => removeItem(item.id))
+    clearSelection()
+  }
+
+  function duplicateSelected() {
+    const selected = selectedItems.value
+    clearSelection()
+
+    const newIds: string[] = []
+
+    selected.forEach(item => {
+      // Create new item params
+      const params = {
+        startTime: item.startTime + 100,
+        endTime: item.endTime + 100,
+        text: item.text,
+        style: item.style
+      }
+
+      const command = new AddSubtitleCommand({
+        item: params,
+        addFn: (item) => {
+          const newItem = createSubtitleItem(item)
+          items.value.push(newItem)
+          items.value.sort((a, b) => a.startTime - b.startTime)
+          newIds.push(newItem.id)
+          return newItem
+        },
+        removeFn: (id: string) => {
+          const index = items.value.findIndex(item => item.id === id)
+          if (index !== -1) {
+            items.value.splice(index, 1)
+            selectedIds.value.delete(id)
+          }
+        }
+      })
+      history.execute(command)
+    })
+
+    // Select the newly created items
+    newIds.forEach(id => selectItem(id, true))
   }
 
   function addStyle(style: AssStyle) {
@@ -135,6 +277,8 @@ export const useSubtitleStore = defineStore('subtitle', () => {
     hasFile,
     selectedItems,
     isSelected,
+    canUndo,
+    canRedo,
     // Actions
     loadFile,
     unloadFile,
@@ -148,5 +292,11 @@ export const useSubtitleStore = defineStore('subtitle', () => {
     removeStyle,
     updateStyle,
     getExportData,
+    undo,
+    redo,
+    deleteSelected,
+    shiftTime,
+    mergeSelected,
+    duplicateSelected,
   }
 })

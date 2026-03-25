@@ -3,6 +3,9 @@ export const KeyboardShortcuts = {
   DELETE_SUBTITLE: 'Delete',
   SELECT_ALL: 'Ctrl+A',
   ESCAPE: 'Escape',
+  UNDO: 'Ctrl+Z',
+  REDO: 'Ctrl+Y',
+  DUPLICATE: 'Ctrl+D',
 } as const
 
 export function matchesShortcut(event: KeyboardEvent, shortcut: string): boolean {

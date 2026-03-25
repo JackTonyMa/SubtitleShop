@@ -21,7 +21,8 @@
 
     <button
       class="px-3 py-1.5 bg-gray-200 text-gray-700 text-sm rounded hover:bg-gray-300 disabled:opacity-50"
-      disabled
+      :disabled="!store.canUndo"
+      @click="store.undo"
       title="撤销 (Ctrl+Z)"
     >
       ↶ 撤销
@@ -29,10 +30,40 @@
 
     <button
       class="px-3 py-1.5 bg-gray-200 text-gray-700 text-sm rounded hover:bg-gray-300 disabled:opacity-50"
-      disabled
+      :disabled="!store.canRedo"
+      @click="store.redo"
       title="重做 (Ctrl+Y)"
     >
       ↷ 重做
+    </button>
+
+    <div class="w-px h-6 bg-gray-300 mx-2"></div>
+
+    <button
+      class="px-3 py-1.5 bg-gray-200 text-gray-700 text-sm rounded hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+      :disabled="store.selectedIds.size < 2"
+      @click="store.mergeSelected"
+      title="合并选中字幕"
+    >
+      合并
+    </button>
+
+    <button
+      class="px-3 py-1.5 bg-gray-200 text-gray-700 text-sm rounded hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+      :disabled="!hasSelection"
+      @click="store.duplicateSelected"
+      title="复制选中 (Ctrl+D)"
+    >
+      复制
+    </button>
+
+    <button
+      class="px-3 py-1.5 bg-gray-200 text-gray-700 text-sm rounded hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+      :disabled="!hasSelection"
+      @click="handleShiftTime"
+      title="时间平移"
+    >
+      时间+
     </button>
 
     <div class="w-px h-6 bg-gray-300 mx-2"></div>
@@ -65,8 +96,11 @@ function handleAdd() {
 }
 
 function handleDelete() {
-  const ids = Array.from(store.selectedIds)
-  ids.forEach(id => store.removeItem(id))
-  store.clearSelection()
+  store.deleteSelected()
+}
+
+function handleShiftTime() {
+  // Shift forward by 1 second (1000ms)
+  store.shiftTime(1000)
 }
 </script>
