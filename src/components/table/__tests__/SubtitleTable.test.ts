@@ -31,12 +31,13 @@ describe('SubtitleTable', () => {
 
     // Check table header
     const headers = wrapper.findAll('th')
-    expect(headers.length).toBe(5)
+    expect(headers.length).toBe(6)
     expect(headers[0].text()).toContain('#')
     expect(headers[1].text()).toContain('开始时间')
     expect(headers[2].text()).toContain('结束时间')
     expect(headers[3].text()).toContain('时长')
-    expect(headers[4].text()).toContain('文本')
+    expect(headers[4].text()).toContain('样式')
+    expect(headers[5].text()).toContain('文本')
 
     // Check rows are rendered
     const rows = wrapper.findAll('tbody tr')
