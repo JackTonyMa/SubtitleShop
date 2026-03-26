@@ -30,6 +30,12 @@ const ZOOM_STEP = 0.5
 
 // Computed
 const zoomPercent = computed(() => `${Math.round(zoomLevel.value * 100)}%`)
+const contentWidthStyle = computed(() => ({
+  width: `${Math.max(100, Math.round(zoomLevel.value * 100))}%`,
+  minWidth: '100%',
+}))
+const hasItems = computed(() => props.items.length > 0)
+const trackContainerRef = ref<HTMLElement | null>(null)
 
 // Methods
 function zoomIn() {
@@ -74,7 +80,7 @@ function stopPlayheadDrag() {
 }
 
 function updatePlayheadFromEvent(event: MouseEvent) {
-  const timelineEl = (event.target as HTMLElement).closest('.timeline-track-container') as HTMLElement
+  const timelineEl = trackContainerRef.value
   if (!timelineEl) return
 
   const rect = timelineEl.getBoundingClientRect()
@@ -126,51 +132,61 @@ function formatTime(ms: number): string {
         当前时间: {{ formatTime(currentTime) }}
       </div>
     </div>
+    <div class="timeline-help px-4 py-2 text-xs text-gray-600 bg-blue-50 border-b border-blue-100">
+      用途：查看字幕在时间轴上的分布，拖拽字幕块左右边缘可直接调整入点/出点。
+    </div>
 
     <!-- Timeline content -->
-    <div class="timeline-content relative">
-      <!-- Ruler -->
-      <TimelineRuler
-        :duration="duration"
-        :zoom="zoomLevel"
-        @seek="handleSeek"
-      />
-
-      <!-- Track with playhead -->
-      <div class="timeline-track-container relative h-32 bg-white">
-        <!-- Grid lines -->
-        <div class="absolute inset-0 pointer-events-none">
-          <div
-            v-for="i in Math.ceil(duration / 60000 * zoomLevel)"
-            :key="i"
-            class="absolute top-0 bottom-0 w-px bg-gray-100"
-            :style="{ left: `${((i - 1) / (duration / 60000 * zoomLevel)) * 100}%` }"
+    <div v-if="hasItems" class="timeline-content relative">
+      <div class="timeline-scroll overflow-x-auto">
+        <div class="timeline-inner" :style="contentWidthStyle">
+          <!-- Ruler -->
+          <TimelineRuler
+            :duration="duration"
+            :zoom="zoomLevel"
+            @seek="handleSeek"
           />
-        </div>
 
-        <!-- Subtitle blocks -->
-        <TimelineTrack
-          :items="items"
-          :duration="duration"
-          :zoom="zoomLevel"
-          @select="handleSelect"
-          @update="handleUpdate"
-        />
+          <!-- Track with playhead -->
+          <div ref="trackContainerRef" class="timeline-track-container relative h-32 bg-white">
+            <!-- Grid lines -->
+            <div class="absolute inset-0 pointer-events-none">
+              <div
+                v-for="i in Math.ceil(duration / 60000 * zoomLevel)"
+                :key="i"
+                class="absolute top-0 bottom-0 w-px bg-gray-100"
+                :style="{ left: `${((i - 1) / (duration / 60000 * zoomLevel)) * 100}%` }"
+              />
+            </div>
 
-        <!-- Playhead -->
-        <div
-          class="playhead absolute top-0 bottom-0 w-px bg-red-500 cursor-ew-resize z-20"
-          :style="{ left: `${(currentTime / duration) * 100}%` }"
-          @mousedown="startPlayheadDrag"
-        >
-          <!-- Playhead triangle -->
-          <div class="absolute -top-1 -translate-x-1/2">
-            <svg class="w-3 h-2 text-red-500" viewBox="0 0 12 8" fill="currentColor">
-              <polygon points="6,0 12,8 0,8"/>
-            </svg>
+            <!-- Subtitle blocks -->
+            <TimelineTrack
+              :items="items"
+              :duration="duration"
+              :zoom="zoomLevel"
+              @select="handleSelect"
+              @update="handleUpdate"
+            />
+
+            <!-- Playhead -->
+            <div
+              class="playhead absolute top-0 bottom-0 w-px bg-red-500 cursor-ew-resize z-20"
+              :style="{ left: `${(currentTime / duration) * 100}%` }"
+              @mousedown="startPlayheadDrag"
+            >
+              <!-- Playhead triangle -->
+              <div class="absolute -top-1 -translate-x-1/2">
+                <svg class="w-3 h-2 text-red-500" viewBox="0 0 12 8" fill="currentColor">
+                  <polygon points="6,0 12,8 0,8"/>
+                </svg>
+              </div>
+            </div>
           </div>
         </div>
       </div>
+    </div>
+    <div v-else class="px-6 py-10 text-sm text-gray-500 bg-white">
+      暂无字幕数据。导入文件后，这里会显示时间轴并可拖拽调整时间。
     </div>
   </div>
 </template>
@@ -205,6 +221,10 @@ function formatTime(ms: number): string {
 }
 
 .timeline-track-container {
+  position: relative;
+}
+
+.timeline-inner {
   position: relative;
 }
 

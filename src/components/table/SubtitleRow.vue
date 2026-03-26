@@ -9,6 +9,7 @@ const props = defineProps<{
   item: SubtitleItem
   isSelected: boolean
   styleName: string
+  groupSize?: number
 }>()
 
 const emit = defineEmits<{
@@ -68,7 +69,13 @@ function handleEndTimeUpdate(newValue: number) {
       {{ durationFormatted }}
     </td>
     <td class="px-4 py-2 text-gray-600 text-xs">
-      {{ styleName }}
+      <div class="flex items-center gap-2">
+        <span>{{ styleName }}</span>
+        <span v-if="groupSize && groupSize > 1" class="group-chip">组{{ groupSize }}行</span>
+        <span v-if="item.hasInlineOverrides" class="inline-tag-chip" title="该行有内联标签，优先级高于样式">
+          内联覆盖
+        </span>
+      </div>
     </td>
     <td class="px-4 py-2">
       <TextCell
@@ -78,3 +85,23 @@ function handleEndTimeUpdate(newValue: number) {
     </td>
   </tr>
 </template>
+
+<style scoped>
+.group-chip {
+  font-size: 10px;
+  line-height: 1;
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.inline-tag-chip {
+  font-size: 10px;
+  line-height: 1;
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: #fef3c7;
+  color: #92400e;
+}
+</style>

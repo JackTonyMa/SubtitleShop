@@ -104,4 +104,23 @@ describe('SubtitleTable', () => {
     const row = wrapper.find('tbody tr')
     expect(row.exists()).toBe(true)
   })
+
+  it('shows overlap group row for multi-line time-overlap subtitles', () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const store = useSubtitleStore()
+
+    store.items = [
+      { id: '1', startTime: 1000, endTime: 3000, text: '中文', style: 'CN' },
+      { id: '2', startTime: 1200, endTime: 2800, text: 'English', style: 'EN' },
+    ]
+
+    const wrapper = mount(SubtitleTable, {
+      global: {
+        plugins: [pinia],
+      },
+    })
+
+    expect(wrapper.text()).toContain('多行组')
+  })
 })

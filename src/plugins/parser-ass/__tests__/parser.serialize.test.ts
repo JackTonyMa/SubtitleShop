@@ -1,0 +1,263 @@
+import { describe, it, expect } from 'vitest'
+import {
+  analyzeAssStructure,
+  collectAssStyleCandidates,
+  hasScatteredStyleCandidates,
+  normalizeAssStructureText,
+  normalizeAssStructureWithSelectedStyles,
+  parseAss,
+  serializeAss
+} from '../parser'
+import { createAssStyle } from '../../../core/models/AssStyle'
+
+describe('serializeAss', () => {
+  it('writes updated primary color to ASS style line', () => {
+    const content = serializeAss({
+      styles: [
+        createAssStyle({
+          name: 'Default',
+          primaryColor: '&H000000FF',
+        }),
+      ],
+      items: [
+        {
+          id: '1',
+          startTime: 0,
+          endTime: 1000,
+          text: 'Hello',
+        },
+      ],
+    })
+
+    expect(content).toContain('Style: Default,Arial,20,&H000000FF')
+  })
+
+  it('falls back to existing style name when dialogue style is missing', () => {
+    const content = serializeAss({
+      styles: [
+        createAssStyle({
+          name: 'RenamedStyle',
+        }),
+      ],
+      items: [
+        {
+          id: '1',
+          startTime: 0,
+          endTime: 1000,
+          text: 'Hello',
+          style: 'Default',
+        },
+      ],
+    })
+
+    expect(content).toContain('Dialogue: 0,0:00:00.00,0:00:01.00,RenamedStyle')
+  })
+
+  it('preserves decimal shadow values when parsing ASS', () => {
+    const parsed = parseAss(`[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Arial,100,&H00FFFFFF,&H000000FF,&H32000000,&H32000000,0,0,0,0,100,100,0,0,1,2,0.5,2,5,5,60,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.00,0:00:01.00,Default,,0,0,0,,Hello`)
+
+    expect(parsed.styles?.[0].shadow).toBe(0.5)
+  })
+
+  it('preserves layer and commas inside ASS inline tags', () => {
+    const parsed = parseAss(`[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Arial,20,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,10,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 2,0:01:30.04,0:01:32.23,Default,,0,0,0,,{\\fad(120,120)}此僚置毒弒父`)
+
+    const out = serializeAss({
+      styles: parsed.styles,
+      items: parsed.items,
+      scriptInfo: parsed.scriptInfo,
+    })
+    expect(out).toContain('Dialogue: 2,0:01:30.04,0:01:32.23,Default,,0,0,0,,{\\fad(120,120)}此僚置毒弒父')
+  })
+
+  it('parses dialogue fields by events format mapping', () => {
+    const parsed = parseAss(`[Events]
+Format: Start, End, Layer, Style, Actor, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0:01:30.04,0:01:32.23,2,Default,,0,0,0,,{\\fad(120,120)}abc`)
+
+    expect(parsed.items).toHaveLength(1)
+    expect(parsed.items?.[0].layer).toBe(2)
+    expect(parsed.items?.[0].style).toBe('Default')
+    expect(parsed.items?.[0].assText).toBe('{\\fad(120,120)}abc')
+  })
+
+  it('detects duplicate style/events sections and extra format lines', () => {
+    const analysis = analyzeAssStructure(`[V4+ Styles]
+Format: Name, Fontname
+Format: Name, Fontname
+Style: A,Arial
+
+[V4+ Styles]
+Format: Name, Fontname
+Style: B,Arial
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text`)
+
+    expect(analysis.duplicateStyleSections).toBe(1)
+    expect(analysis.duplicateEventSections).toBe(1)
+    expect(analysis.extraStyleFormatLines).toBe(2)
+    expect(analysis.extraEventFormatLines).toBe(1)
+    expect(analysis.hasIssues).toBe(true)
+  })
+
+  it('deduplicates style definitions by style name when parsing', () => {
+    const parsed = parseAss(`[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Arial,20,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,10,1
+Style: Default,Arial,30,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,10,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.00,0:00:01.00,Default,,0,0,0,,A`)
+
+    expect(parsed.styles).toHaveLength(1)
+    expect(parsed.styles?.[0].fontSize).toBe(30)
+  })
+
+  it('normalizes duplicated style/events headers and extra format lines without collapsing content', () => {
+    const raw = `[Script Info]
+Title: Demo
+
+[V4+ Styles]
+Format: Name, Fontname
+Style: A,Arial
+[V4+ Styles]
+Format: Name, Fontname
+Style: B,Arial
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.00,0:00:01.00,A,,0,0,0,,A
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:01.00,0:00:02.00,B,,0,0,0,,B`
+
+    const normalized = normalizeAssStructureText(raw)
+    expect((normalized.match(/\[V4\+ Styles\]/g) || []).length).toBe(1)
+    expect((normalized.match(/\[Events\]/g) || []).length).toBe(1)
+    expect((normalized.match(/^Format:/gm) || []).length).toBe(2)
+    expect(normalized).toContain('Style: A,Arial')
+    expect(normalized).toContain('Style: B,Arial')
+    expect(normalized).toContain('Dialogue: 0,0:00:01.00,0:00:02.00,B,,0,0,0,,B')
+  })
+
+  it('keeps only selected style lines when style ids are provided', () => {
+    const raw = `[V4+ Styles]
+Format: Name, Fontname
+Style: A,Arial
+[V4+ Styles]
+Format: Name, Fontname
+Style: B,Arial
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.00,0:00:01.00,A,,0,0,0,,A`
+
+    const candidates = collectAssStyleCandidates(raw)
+    const normalized = normalizeAssStructureWithSelectedStyles(raw, [candidates[0].id])
+    expect(normalized).toContain('Style: A,Arial')
+    expect(normalized).not.toContain('Style: B,Arial')
+  })
+
+  it('selects duplicated style lines by id order without collision', () => {
+    const raw = `[V4+ Styles]
+Format: Name, Fontname
+Style: Default,Arial
+
+[V4+ Styles]
+Format: Name, Fontname
+Style: Default,Arial
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.00,0:00:01.00,Default,,0,0,0,,A
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,B`
+
+    const candidates = collectAssStyleCandidates(raw)
+    const normalized = normalizeAssStructureWithSelectedStyles(raw, [candidates[1].id])
+    expect(normalized).not.toContain('Style: Default,Arial\nStyle: Default2,Arial')
+    expect(normalized).toContain('Style: Default,Arial')
+    expect(normalized).toContain('Dialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,B')
+  })
+
+  it('identifies style candidates scattered across multiple style sections', () => {
+    const raw = `[V4+ Styles]
+Format: Name, Fontname
+Style: A,Arial
+
+[V4+ Styles]
+Format: Name, Fontname
+Style: B,Arial`
+
+    const candidates = collectAssStyleCandidates(raw)
+    expect(hasScatteredStyleCandidates(candidates)).toBe(true)
+  })
+
+  it('renames colliding styles by section and remaps later event dialogues', () => {
+    const raw = `[Script Info]
+ScriptType: v4.00+
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Arial,23,&H00ffffff,&H0000ffff,&H00000000,&H80000000,0,0,0,0,100,100,0,0.00,1,2,3,2,0,15,15,1
+
+[Events]
+Format: Layer, Start, End, Style, Actor, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:06:17.33,0:06:20.98,Default,,0000,0000,0000,,[ 现在 ]
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Arial,12,&H00ffffff,&H0000ffff,&H00000000,&H80000000,0,0,0,0,100,100,0,0.00,1,2,3,2,0,0,0,1
+
+[Events]
+Format: Layer, Start, End, Style, Actor, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:01:18.33,0:01:19.98,Default,,0000,0000,0000,,Like the way you play the harp,`
+
+    const normalized = normalizeAssStructureText(raw)
+    expect((normalized.match(/\[V4\+ Styles\]/g) || []).length).toBe(1)
+    expect((normalized.match(/\[Events\]/g) || []).length).toBe(1)
+    expect(normalized).toContain('Style: Default,Arial,23')
+    expect(normalized).toContain('Style: Default2,Arial,12')
+    expect(normalized).toContain('Dialogue: 0,0:06:17.33,0:06:20.98,Default,,0000,0000,0000,,[ 现在 ]')
+    expect(normalized).toContain('Dialogue: 0,0:01:18.33,0:01:19.98,Default2,,0000,0000,0000,,Like the way you play the harp,')
+  })
+
+  it('keeps all event lines from later events sections', () => {
+    const raw = `[V4+ Styles]
+Format: Name, Fontname
+Style: Default,Arial
+
+[Events]
+Format: Layer, Start, End, Style, Actor, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.00,0:00:01.00,Default,,0,0,0,,A
+
+[Events]
+Format: Layer, Start, End, Style, Actor, MarginL, MarginR, MarginV, Effect, Text
+Comment: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,B
+Dialogue : 0,0:00:02.00,0:00:03.00,Default,,0,0,0,,C`
+
+    const normalized = normalizeAssStructureText(raw)
+    expect((normalized.match(/\[Events\]/g) || []).length).toBe(1)
+    expect(normalized).toContain('Dialogue: 0,0:00:00.00,0:00:01.00,Default,,0,0,0,,A')
+    expect(normalized).toContain('Comment: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,B')
+    expect(normalized).toContain('Dialogue : 0,0:00:02.00,0:00:03.00,Default,,0,0,0,,C')
+  })
+})

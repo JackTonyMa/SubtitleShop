@@ -91,8 +91,14 @@ export const useSubtitleStore = defineStore('subtitle', () => {
     const item = items.value.find(item => item.id === id)
     if (!item) return false
 
+    const normalizedUpdates: Partial<SubtitleItem> = { ...updates }
+    if ('text' in normalizedUpdates) {
+      normalizedUpdates.assText = undefined
+      normalizedUpdates.hasInlineOverrides = false
+    }
+
     const oldValues: Partial<SubtitleItem> = {}
-    for (const key in updates) {
+    for (const key in normalizedUpdates) {
       if (key in item) {
         (oldValues as Record<string, unknown>)[key] = (item as Record<string, unknown>)[key]
       }
@@ -101,7 +107,7 @@ export const useSubtitleStore = defineStore('subtitle', () => {
     const command = new UpdateSubtitleCommand({
       id,
       oldValues,
-      newValues: updates,
+      newValues: normalizedUpdates,
       updateFn: (id: string, updates: Partial<SubtitleItem>) => {
         const item = items.value.find(item => item.id === id)
         if (item) {
@@ -247,8 +253,33 @@ export const useSubtitleStore = defineStore('subtitle', () => {
   function updateStyle(name: string, updates: Partial<AssStyle>) {
     const style = styles.value.find(s => s.name === name)
     if (style) {
+      const oldName = style.name
       Object.assign(style, updates)
+
+      // Keep subtitle items linked when a style is renamed.
+      if (updates.name && updates.name !== oldName) {
+        items.value.forEach(item => {
+          if (item.style === oldName) {
+            item.style = updates.name
+          }
+        })
+      }
     }
+  }
+
+  function applyStyleToAll(styleName: string) {
+    const exists = styles.value.some(style => style.name === styleName)
+    if (!exists) return 0
+
+    let changedCount = 0
+    items.value.forEach(item => {
+      if (item.style !== styleName) {
+        item.style = styleName
+        changedCount++
+      }
+    })
+
+    return changedCount
   }
 
   function getExportData(): Partial<SubtitleFile> {
@@ -291,6 +322,7 @@ export const useSubtitleStore = defineStore('subtitle', () => {
     addStyle,
     removeStyle,
     updateStyle,
+    applyStyleToAll,
     getExportData,
     undo,
     redo,

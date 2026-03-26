@@ -1,10 +1,13 @@
 export interface SubtitleItem {
   id: string
+  layer?: number
   startTime: number
   endTime: number
   text: string
   style?: string
   effect?: string
+  assText?: string
+  hasInlineOverrides?: boolean
 }
 
 export function createSubtitleItem(params: Omit<SubtitleItem, 'id'>): SubtitleItem {

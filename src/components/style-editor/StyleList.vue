@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import type { AssStyle } from '../../core/models/AssStyle'
+import type { BilingualRole, StyleRoleInfo } from '../../utils/bilingualDetection'
 import { PRESET_STYLES } from '../../components/preset-styles'
 
 const props = defineProps<{
   styles: AssStyle[]
   selectedStyleName: string | null
+  styleRoles?: Record<string, StyleRoleInfo>
+  manualRoleOverrides?: Record<string, BilingualRole | 'auto'>
 }>()
 
 const emit = defineEmits<{
@@ -13,6 +16,7 @@ const emit = defineEmits<{
   (e: 'copy', styleName: string): void
   (e: 'delete', styleName: string): void
   (e: 'applyPreset', presetId: string): void
+  (e: 'roleChange', styleName: string, role: BilingualRole | 'auto'): void
 }>()
 
 function handleSelect(styleName: string) {
@@ -47,6 +51,23 @@ function getStyleSummary(style: AssStyle): string {
   if (style.shadow > 0) features.push(`影${style.shadow}`)
   return features.join(' ') || '默认'
 }
+
+function getRoleLabel(role: BilingualRole): string {
+  if (role === 'primary') return '主语言'
+  if (role === 'secondary') return '副语言'
+  return '中性'
+}
+
+function getRoleClass(role: BilingualRole): string {
+  if (role === 'primary') return 'role-primary'
+  if (role === 'secondary') return 'role-secondary'
+  return 'role-neutral'
+}
+
+function handleRoleSelect(styleName: string, event: Event) {
+  const value = (event.target as HTMLSelectElement).value as BilingualRole | 'auto'
+  emit('roleChange', styleName, value)
+}
 </script>
 
 <template>
@@ -54,7 +75,7 @@ function getStyleSummary(style: AssStyle): string {
     <!-- Project Styles Section -->
     <div class="list-section">
       <div class="section-header">
-        <span class="section-title">项目样式</span>
+        <span class="section-title">内置样式</span>
         <span class="section-count">{{ styles.length }}</span>
       </div>
 
@@ -104,8 +125,33 @@ function getStyleSummary(style: AssStyle): string {
           @click="handleSelect(style.name)"
         >
           <div class="style-item-content">
-            <span class="style-name">{{ style.name }}</span>
+            <span class="style-name-row">
+              <span class="style-name">{{ style.name }}</span>
+              <span
+                v-if="styleRoles?.[style.name]"
+                class="role-badge"
+                :class="getRoleClass(styleRoles[style.name].role)"
+              >
+                {{ getRoleLabel(styleRoles[style.name].role) }}
+              </span>
+            </span>
             <span class="style-summary">{{ getStyleSummary(style) }}</span>
+            <span v-if="styleRoles?.[style.name]" class="style-confidence">
+              识别置信度 {{ Math.round(styleRoles[style.name].confidence * 100) }}% · {{ styleRoles[style.name].reason }}
+            </span>
+            <label class="role-select-row" @click.stop>
+              <span>角色</span>
+              <select
+                class="role-select"
+                :value="manualRoleOverrides?.[style.name] ?? 'auto'"
+                @change="handleRoleSelect(style.name, $event)"
+              >
+                <option value="auto">自动</option>
+                <option value="primary">主语言</option>
+                <option value="secondary">副语言</option>
+                <option value="neutral">中性</option>
+              </select>
+            </label>
           </div>
           <div class="style-preview-mini" :style="{ fontFamily: style.fontName }">
             Aa
@@ -264,7 +310,13 @@ function getStyleSummary(style: AssStyle): string {
 .style-item-content {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.2rem;
+}
+
+.style-name-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
 }
 
 .style-name {
@@ -276,6 +328,51 @@ function getStyleSummary(style: AssStyle): string {
 .style-summary {
   font-size: 0.75rem;
   color: #6b7280;
+}
+
+.style-confidence {
+  font-size: 0.7rem;
+  color: #6b7280;
+  line-height: 1.3;
+}
+
+.role-badge {
+  font-size: 0.65rem;
+  border-radius: 999px;
+  padding: 0.1rem 0.4rem;
+  font-weight: 600;
+}
+
+.role-primary {
+  background-color: #dbeafe;
+  color: #1d4ed8;
+}
+
+.role-secondary {
+  background-color: #dcfce7;
+  color: #166534;
+}
+
+.role-neutral {
+  background-color: #f3f4f6;
+  color: #4b5563;
+}
+
+.role-select-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.7rem;
+  color: #6b7280;
+}
+
+.role-select {
+  border: 1px solid #d1d5db;
+  border-radius: 0.3rem;
+  background-color: white;
+  font-size: 0.7rem;
+  padding: 0.05rem 0.3rem;
+  color: #374151;
 }
 
 .style-preview-mini {

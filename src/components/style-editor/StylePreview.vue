@@ -6,19 +6,26 @@ import { assColorToCss } from '../../utils/assColor'
 const props = defineProps<{
   style: AssStyle
   previewText?: string
+  playResX?: number
+  playResY?: number
 }>()
 
 const defaultPreviewText = '预览文本\nPreview Text'
+const previewHeight = 216
 
 const displayText = computed(() => props.previewText || defaultPreviewText)
+const safePlayResX = computed(() => (props.playResX && props.playResX > 0 ? props.playResX : 1920))
+const safePlayResY = computed(() => (props.playResY && props.playResY > 0 ? props.playResY : 1080))
+const previewScale = computed(() => previewHeight / safePlayResY.value)
 
 // Generate text shadow to simulate ASS outline effect
 const textShadow = computed(() => {
   const shadows: string[] = []
   const outlineColor = assColorToCss(props.style.outlineColor)
+  const scale = previewScale.value
 
   if (props.style.outline > 0) {
-    const width = Math.max(1, props.style.outline * 2)
+    const width = Math.max(1, Math.round(props.style.outline * 2 * scale))
     for (let x = -width; x <= width; x++) {
       for (let y = -width; y <= width; y++) {
         if (Math.abs(x) + Math.abs(y) <= width && (x !== 0 || y !== 0)) {
@@ -30,7 +37,7 @@ const textShadow = computed(() => {
 
   // Add shadow if depth > 0
   if (props.style.shadow > 0) {
-    const shadowOffset = Math.max(1, props.style.shadow * 2)
+    const shadowOffset = Math.max(1, Math.round(props.style.shadow * 2 * scale))
     const shadowOpacity = Math.min(0.5, props.style.shadow * 0.15)
     shadows.push(`${shadowOffset}px ${shadowOffset}px ${shadowOffset}px rgba(0, 0, 0, ${shadowOpacity})`)
   }
@@ -41,9 +48,10 @@ const textShadow = computed(() => {
 const textColor = computed(() => assColorToCss(props.style.primaryColor))
 
 const fontStyle = computed(() => {
+  const scale = previewScale.value
   const styles: Record<string, string> = {
     fontFamily: props.style.fontName,
-    fontSize: `${props.style.fontSize}px`,
+    fontSize: `${Math.max(8, Math.round(props.style.fontSize * scale))}px`,
     color: textColor.value,
     fontWeight: props.style.bold ? 'bold' : 'normal',
     fontStyle: props.style.italic ? 'italic' : 'normal',
@@ -58,32 +66,46 @@ const fontStyle = computed(() => {
   return styles
 })
 
-// Calculate alignment based on ASS alignment values
-// 1-3: bottom, 4-6: middle, 7-9: top
-// 1,4,7: left, 2,5,8: center, 3,6,9: right
-const containerStyle = computed(() => {
+const textPositionStyle = computed(() => {
   const align = props.style.alignment
 
-  let justifyContent = 'center'
-  let alignItems = 'center'
+  let translateX = '-50%'
+  let translateY = '-50%'
+  let xPercent = 50
+  let yPercent = 50
 
-  // Horizontal alignment
   if (align === 1 || align === 4 || align === 7) {
-    justifyContent = 'flex-start'
+    xPercent = Math.max(0, Math.min(100, (props.style.marginL / safePlayResX.value) * 100))
+    translateX = '0%'
   } else if (align === 3 || align === 6 || align === 9) {
-    justifyContent = 'flex-end'
+    xPercent = Math.max(0, Math.min(100, 100 - (props.style.marginR / safePlayResX.value) * 100))
+    translateX = '-100%'
+  } else {
+    xPercent = Math.max(
+      0,
+      Math.min(
+        100,
+        50 + ((props.style.marginL - props.style.marginR) / (2 * safePlayResX.value)) * 100
+      )
+    )
   }
-
-  // Vertical alignment
   if (align === 1 || align === 2 || align === 3) {
-    alignItems = 'flex-end'
+    yPercent = Math.max(0, Math.min(100, 100 - (props.style.marginV / safePlayResY.value) * 100))
+    translateY = '-100%'
   } else if (align === 7 || align === 8 || align === 9) {
-    alignItems = 'flex-start'
+    yPercent = Math.max(0, Math.min(100, (props.style.marginV / safePlayResY.value) * 100))
+    translateY = '0%'
+  } else {
+    yPercent = Math.max(
+      0,
+      Math.min(100, 50 + (props.style.marginV / (safePlayResY.value / 2)) * 50)
+    )
   }
 
   return {
-    justifyContent,
-    alignItems,
+    left: `${xPercent}%`,
+    top: `${yPercent}%`,
+    transform: `translate(${translateX}, ${translateY})`,
   }
 })
 
@@ -102,11 +124,10 @@ const textAlignment = computed(() => {
     </div>
     <div
       class="preview-canvas"
-      :style="containerStyle"
     >
       <div
         class="preview-text"
-        :style="fontStyle"
+        :style="{ ...fontStyle, ...textPositionStyle }"
         :class="[`text-${textAlignment}`]"
       >
         <template v-for="(line, index) in displayText.split('\n')" :key="index">
@@ -145,14 +166,19 @@ const textAlignment = computed(() => {
 }
 
 .preview-canvas {
-  min-height: 160px;
-  padding: 2rem;
-  display: flex;
-  flex-direction: column;
+  width: 100%;
+  max-width: 384px;
+  aspect-ratio: 16 / 9;
+  margin: 0.75rem auto;
   position: relative;
+  border-radius: 0.375rem;
+  background: radial-gradient(circle at 50% 35%, #1f2a44 0%, #151b2d 55%, #0e1321 100%);
+  overflow: hidden;
 }
 
 .preview-text {
+  position: absolute;
+  max-width: 90%;
   white-space: pre-wrap;
   line-height: 1.4;
   transition: all 0.15s ease;

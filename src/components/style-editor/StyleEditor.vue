@@ -4,23 +4,119 @@ import { useSubtitleStore } from '../../stores/subtitle'
 import { createAssStyle } from '../../core/models/AssStyle'
 import type { AssStyle } from '../../core/models/AssStyle'
 import { createStyleFromPreset } from '../preset-styles'
+import { detectBilingualStyleRoles, type BilingualRole } from '../../utils/bilingualDetection'
+import type { SubtitleItem } from '../../core/models/SubtitleItem'
 import StyleList from './StyleList.vue'
 import StyleForm from './StyleForm.vue'
 import StylePreview from './StylePreview.vue'
+import TrackPanel from './TrackPanel.vue'
 
 const store = useSubtitleStore()
 
 const selectedStyleName = ref<string | null>(null)
 const editingStyle = ref<AssStyle | null>(null)
+const manualRoleOverrides = ref<Record<string, BilingualRole | 'auto'>>({})
+const selectedTrack = ref<number | null>(null)
+const trackStyleBindings = ref<Record<number, string>>({})
 
 // Watch for store styles changes
 const projectStyles = computed(() => store.styles)
+const playResX = computed(() => {
+  const value = Number(store.currentFile?.scriptInfo?.PlayResX)
+  return Number.isFinite(value) && value > 0 ? value : 1920
+})
+const playResY = computed(() => {
+  const value = Number(store.currentFile?.scriptInfo?.PlayResY)
+  return Number.isFinite(value) && value > 0 ? value : 1080
+})
+const autoStyleRoles = computed(() => detectBilingualStyleRoles(store.items, store.styles))
+const resolvedStyleRoles = computed(() => {
+  const resolved: Record<string, ReturnType<typeof detectBilingualStyleRoles>[string]> = {}
+  for (const style of store.styles) {
+    const auto = autoStyleRoles.value[style.name] ?? { role: 'neutral' as BilingualRole, confidence: 0, reason: '无可用信息' }
+    const manual = manualRoleOverrides.value[style.name]
+    if (manual && manual !== 'auto') {
+      resolved[style.name] = {
+        role: manual,
+        confidence: 1,
+        reason: '手动标记',
+      }
+    } else {
+      resolved[style.name] = auto
+    }
+  }
+  return resolved
+})
 
-// Initialize selected style when styles change
+const itemTrackMap = computed(() => {
+  const map = new Map<string, number>()
+  const styleOrder = new Map<string, number>()
+  let nextTrack = 1
+
+  for (const item of store.items) {
+    const styleName = item.style || 'Default'
+    if (!styleOrder.has(styleName)) {
+      styleOrder.set(styleName, nextTrack++)
+    }
+    map.set(item.id, styleOrder.get(styleName)!)
+  }
+
+  return map
+})
+
+const trackSummaries = computed(() => {
+  const byTrack = new Map<number, SubtitleItem[]>()
+  for (const item of store.items) {
+    const track = itemTrackMap.value.get(item.id)
+    if (!track) continue
+    if (!byTrack.has(track)) byTrack.set(track, [])
+    byTrack.get(track)!.push(item)
+  }
+
+  const tracks = Array.from(byTrack.entries())
+    .sort((a, b) => a[0] - b[0])
+    .map(([track, items]) => {
+      const dominantStyle = items[0]?.style || store.styles[0]?.name || 'Default'
+      return {
+        track,
+        itemCount: items.length,
+        dominantStyle,
+      }
+    })
+
+  return tracks
+})
+
+// Keep local editing state synced with store styles (including reload after structure fix).
 watch(projectStyles, (styles) => {
-  if (styles.length > 0 && !selectedStyleName.value) {
-    selectedStyleName.value = styles[0].name
-    editingStyle.value = { ...styles[0] }
+  if (styles.length === 0) {
+    selectedStyleName.value = null
+    editingStyle.value = null
+    return
+  }
+
+  const currentName = selectedStyleName.value
+  const matched = currentName
+    ? styles.find(style => style.name === currentName)
+    : null
+
+  if (matched) {
+    editingStyle.value = { ...matched }
+    return
+  }
+
+  selectedStyleName.value = styles[0].name
+  editingStyle.value = { ...styles[0] }
+}, { immediate: true })
+
+watch(trackSummaries, (tracks) => {
+  if (tracks.length > 0 && !selectedTrack.value) {
+    selectedTrack.value = tracks[0].track
+  }
+  for (const track of tracks) {
+    if (!trackStyleBindings.value[track.track]) {
+      trackStyleBindings.value[track.track] = track.dominantStyle
+    }
   }
 }, { immediate: true })
 
@@ -104,8 +200,41 @@ function handleApplyPreset(presetId: string) {
 }
 
 function handleStyleUpdate(updatedStyle: AssStyle) {
+  const previousName = selectedStyleName.value
   editingStyle.value = updatedStyle
-  store.updateStyle(selectedStyleName.value!, updatedStyle)
+  if (!previousName) return
+
+  store.updateStyle(previousName, updatedStyle)
+
+  if (updatedStyle.name !== previousName) {
+    if (manualRoleOverrides.value[previousName]) {
+      manualRoleOverrides.value[updatedStyle.name] = manualRoleOverrides.value[previousName]
+      delete manualRoleOverrides.value[previousName]
+    }
+    selectedStyleName.value = updatedStyle.name
+  }
+}
+
+function handleRoleChange(styleName: string, role: BilingualRole | 'auto') {
+  manualRoleOverrides.value[styleName] = role
+}
+
+function handleTrackSelect(track: number) {
+  selectedTrack.value = track
+}
+
+function handleTrackBindingUpdate(track: number, styleName: string) {
+  trackStyleBindings.value[track] = styleName
+}
+
+function handleApplyTrackStyle(track: number) {
+  const targetStyle = trackStyleBindings.value[track]
+  if (!targetStyle) return
+  store.items
+    .filter(item => itemTrackMap.value.get(item.id) === track)
+    .forEach(item => {
+      store.updateItem(item.id, { style: targetStyle })
+    })
 }
 </script>
 
@@ -117,16 +246,32 @@ function handleStyleUpdate(updatedStyle: AssStyle) {
     </div>
 
     <div class="editor-body">
-      <!-- Left: Style List -->
-      <div class="editor-sidebar">
+      <!-- Left: Tracks -->
+      <div class="editor-sidebar tracks-sidebar">
+        <TrackPanel
+          :tracks="trackSummaries"
+          :selected-track="selectedTrack"
+          :track-style-bindings="trackStyleBindings"
+          :style-names="projectStyles.map(style => style.name)"
+          @select="handleTrackSelect"
+          @update-binding="handleTrackBindingUpdate"
+          @apply-track="handleApplyTrackStyle"
+        />
+      </div>
+
+      <!-- Middle: Style Library -->
+      <div class="editor-sidebar styles-sidebar">
         <StyleList
           :styles="projectStyles"
           :selected-style-name="selectedStyleName"
+          :style-roles="resolvedStyleRoles"
+          :manual-role-overrides="manualRoleOverrides"
           @select="handleSelect"
           @new="handleNew"
           @copy="handleCopy"
           @delete="handleDelete"
           @apply-preset="handleApplyPreset"
+          @role-change="handleRoleChange"
         />
       </div>
 
@@ -138,6 +283,8 @@ function handleStyleUpdate(updatedStyle: AssStyle) {
               <h3 class="section-title">样式设置</h3>
               <StyleForm
                 :model-value="editingStyle"
+                :play-res-x="playResX"
+                :play-res-y="playResY"
                 @update:model-value="handleStyleUpdate"
               />
             </div>
@@ -145,6 +292,8 @@ function handleStyleUpdate(updatedStyle: AssStyle) {
               <h3 class="section-title">实时预览</h3>
               <StylePreview
                 :style="editingStyle"
+                :play-res-x="playResX"
+                :play-res-y="playResY"
                 preview-text="字幕预览文本\nSubtitle Preview"
               />
             </div>
@@ -198,27 +347,36 @@ function handleStyleUpdate(updatedStyle: AssStyle) {
 .editor-body {
   display: flex;
   flex: 1;
-  overflow: hidden;
+  overflow: auto;
 }
 
 .editor-sidebar {
-  width: 280px;
+  width: 260px;
   flex-shrink: 0;
   border-right: 1px solid #e5e7eb;
   overflow-y: auto;
 }
 
+.tracks-sidebar {
+  width: 220px;
+}
+
+.styles-sidebar {
+  width: 280px;
+}
+
 .editor-content {
   flex: 1;
-  overflow-y: auto;
+  overflow: auto;
   padding: 1.5rem;
 }
 
 .content-split {
   display: grid;
-  grid-template-columns: 1fr 400px;
+  grid-template-columns: minmax(560px, 1fr) minmax(360px, 440px);
   gap: 2rem;
-  max-width: 1000px;
+  min-width: 940px;
+  max-width: 1240px;
 }
 
 .form-section {
@@ -260,6 +418,37 @@ function handleStyleUpdate(updatedStyle: AssStyle) {
 .empty-hint {
   font-size: 0.875rem;
   color: #9ca3af;
+}
+
+@media (max-width: 1600px) {
+  .editor-body {
+    overflow-x: auto;
+  }
+
+  .content-split {
+    grid-template-columns: 1fr;
+    min-width: 0;
+    max-width: none;
+  }
+
+  .preview-section {
+    max-width: 520px;
+  }
+}
+
+@media (max-width: 1200px) {
+  .editor-body {
+    flex-direction: column;
+  }
+
+  .editor-sidebar,
+  .tracks-sidebar,
+  .styles-sidebar {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid #e5e7eb;
+    max-height: 260px;
+  }
 }
 
 @media (max-width: 900px) {

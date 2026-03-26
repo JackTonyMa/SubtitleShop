@@ -3,9 +3,14 @@ import { computed } from 'vue'
 import type { AssStyle } from '../../core/models/AssStyle'
 import { assColorToCss, cssToAssColor } from '../../utils/assColor'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   modelValue: AssStyle
-}>()
+  playResX?: number
+  playResY?: number
+}>(), {
+  playResX: 1920,
+  playResY: 1080,
+})
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: AssStyle): void
@@ -30,23 +35,84 @@ const outlineColorCss = computed({
   }
 });
 
+const styleName = computed({
+  get: () => style.value.name,
+  set: (value: string) => {
+    updateStyle({ name: value })
+  }
+})
+
+const fontName = computed({
+  get: () => style.value.fontName,
+  set: (value: string) => {
+    updateStyle({ fontName: value })
+  }
+})
+
+const horizontalPosition = computed({
+  get: () => {
+    const align = style.value.alignment
+    const resX = props.playResX
+    if (align === 1 || align === 4 || align === 7) {
+      return Math.round((style.value.marginL / resX) * 100)
+    }
+    if (align === 3 || align === 6 || align === 9) {
+      return Math.round(100 - (style.value.marginR / resX) * 100)
+    }
+    return Math.round(50 + ((style.value.marginL - style.value.marginR) / (2 * resX)) * 100)
+  },
+  set: (value: number) => {
+    const safe = Math.max(0, Math.min(100, value))
+    const verticalBand = getVerticalBand(style.value.alignment)
+    const delta = ((safe - 50) / 50) * props.playResX
+    updateStyle({
+      alignment: verticalBand === 'top' ? 8 : verticalBand === 'middle' ? 5 : 2,
+      marginL: delta >= 0 ? Math.round(delta) : 0,
+      marginR: delta < 0 ? Math.round(-delta) : 0,
+    })
+  }
+})
+
+const verticalPosition = computed({
+  get: () => {
+    const align = style.value.alignment
+    const resY = props.playResY
+    if (align === 7 || align === 8 || align === 9) {
+      return Math.round((style.value.marginV / resY) * 100)
+    }
+    if (align === 1 || align === 2 || align === 3) {
+      return Math.round(100 - (style.value.marginV / resY) * 100)
+    }
+    return Math.round(50 + (style.value.marginV / (resY / 2)) * 50)
+  },
+  set: (value: number) => {
+    const safe = Math.max(0, Math.min(100, value))
+    const verticalBand = getVerticalBand(style.value.alignment)
+    let marginV = 0
+    if (verticalBand === 'top') {
+      marginV = Math.round((safe / 100) * props.playResY)
+    } else if (verticalBand === 'bottom') {
+      marginV = Math.round(((100 - safe) / 100) * props.playResY)
+    } else {
+      marginV = Math.round(((safe - 50) / 50) * (props.playResY / 2))
+    }
+    updateStyle({
+      alignment: verticalBand === 'top' ? 8 : verticalBand === 'middle' ? 5 : 2,
+      marginV,
+    })
+  }
+})
+
+function getVerticalBand(alignment: number): 'top' | 'middle' | 'bottom' {
+  if (alignment >= 7) return 'top'
+  if (alignment >= 4) return 'middle'
+  return 'bottom'
+}
+
 function updateStyle(updates: Partial<AssStyle>) {
   style.value = { ...style.value, ...updates }
 }
 
-// Alignment grid: 1 2 3 / 4 5 6 / 7 8 9
-// Where 2=bottom-center, 5=center, 8=top-center
-const alignments = [
-  { value: 7, label: '左下' },
-  { value: 8, label: '中下' },
-  { value: 9, label: '右下' },
-  { value: 4, label: '左中' },
-  { value: 5, label: '中心' },
-  { value: 6, label: '右中' },
-  { value: 1, label: '左上' },
-  { value: 2, label: '中上' },
-  { value: 3, label: '右上' },
-]
 </script>
 
 <template>
@@ -56,7 +122,7 @@ const alignments = [
       <label class="form-label">样式名称</label>
       <input
         type="text"
-        v-model="style.name"
+        v-model="styleName"
         class="form-input"
         placeholder="输入样式名称"
       />
@@ -67,7 +133,7 @@ const alignments = [
       <label class="form-label">字体</label>
       <input
         type="text"
-        v-model="style.fontName"
+        v-model="fontName"
         class="form-input"
         placeholder="输入字体名称"
       />
@@ -84,7 +150,7 @@ const alignments = [
         :value="style.fontSize"
         @input="updateStyle({ fontSize: Number(($event.target as HTMLInputElement).value) })"
         min="8"
-        max="72"
+        max="200"
         class="form-slider"
       />
     </div>
@@ -182,23 +248,46 @@ const alignments = [
       />
     </div>
 
-    <!-- Alignment Grid -->
+    <!-- Position Sliders -->
     <div class="form-group">
-      <label class="form-label">对齐方式</label>
-      <div class="alignment-grid">
-        <button
-          v-for="align in alignments"
-          :key="align.value"
-          type="button"
-          @click="updateStyle({ alignment: align.value })"
-          :class="[
-            'alignment-btn',
-            style.alignment === align.value ? 'active' : ''
-          ]"
-          :title="align.label"
-        >
-          <span class="alignment-dot" :class="`align-${align.value}`" />
-        </button>
+      <label class="form-label flex justify-between">
+        <span>横向位置</span>
+        <span class="text-gray-500">{{ horizontalPosition }}%</span>
+      </label>
+      <input
+        type="range"
+        :value="horizontalPosition"
+        @input="horizontalPosition = Number(($event.target as HTMLInputElement).value)"
+        min="0"
+        max="100"
+        step="1"
+        class="form-slider"
+      />
+      <div class="position-hints">
+        <span>左</span>
+        <span>中</span>
+        <span>右</span>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label flex justify-between">
+        <span>纵向位置</span>
+        <span class="text-gray-500">{{ verticalPosition }}%</span>
+      </label>
+      <input
+        type="range"
+        :value="verticalPosition"
+        @input="verticalPosition = Number(($event.target as HTMLInputElement).value)"
+        min="0"
+        max="100"
+        step="1"
+        class="form-slider"
+      />
+      <div class="position-hints">
+        <span>上</span>
+        <span>中</span>
+        <span>下</span>
       </div>
     </div>
   </div>
@@ -277,54 +366,10 @@ const alignments = [
   cursor: pointer;
 }
 
-.alignment-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0.25rem;
-  width: fit-content;
-}
-
-.alignment-btn {
-  width: 2.5rem;
-  height: 2.5rem;
+.position-hints {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid #d1d5db;
-  border-radius: 0.375rem;
-  background-color: white;
-  cursor: pointer;
-  transition: all 0.15s ease;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: #6b7280;
 }
-
-.alignment-btn:hover {
-  background-color: #f3f4f6;
-}
-
-.alignment-btn.active {
-  background-color: #3b82f6;
-  border-color: #3b82f6;
-}
-
-.alignment-dot {
-  width: 0.5rem;
-  height: 0.5rem;
-  background-color: #6b7280;
-  border-radius: 50%;
-}
-
-.alignment-btn.active .alignment-dot {
-  background-color: white;
-}
-
-/* Position dots according to alignment values */
-.align-1 { align-self: flex-start; justify-self: flex-start; }
-.align-2 { align-self: flex-start; justify-self: center; }
-.align-3 { align-self: flex-start; justify-self: flex-end; }
-.align-4 { align-self: center; justify-self: flex-start; }
-.align-5 { align-self: center; justify-self: center; }
-.align-6 { align-self: center; justify-self: flex-end; }
-.align-7 { align-self: flex-end; justify-self: flex-start; }
-.align-8 { align-self: flex-end; justify-self: center; }
-.align-9 { align-self: flex-end; justify-self: flex-end; }
 </style>

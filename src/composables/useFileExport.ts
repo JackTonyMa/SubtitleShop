@@ -20,7 +20,7 @@ export function useFileExport() {
 
     const link = document.createElement('a')
     link.href = url
-    link.download = filename ?? store.currentFile?.filename ?? `export.${format}`
+    link.download = filename ?? 'ass.ass'
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
