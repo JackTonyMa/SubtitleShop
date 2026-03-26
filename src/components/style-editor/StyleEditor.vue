@@ -4,7 +4,7 @@ import { useSubtitleStore } from '../../stores/subtitle'
 import { createAssStyle } from '../../core/models/AssStyle'
 import type { AssStyle } from '../../core/models/AssStyle'
 import { createStyleFromPreset } from '../preset-styles'
-import { detectBilingualStyleRoles, type BilingualRole } from '../../utils/bilingualDetection'
+import { detectBilingualStyleRoles } from '../../utils/bilingualDetection'
 import type { SubtitleItem } from '../../core/models/SubtitleItem'
 import StyleList from './StyleList.vue'
 import StyleForm from './StyleForm.vue'
@@ -12,12 +12,16 @@ import StylePreview from './StylePreview.vue'
 import TrackPanel from './TrackPanel.vue'
 
 const store = useSubtitleStore()
+const UNIFIED_STYLE_PLACEHOLDER = '无统一样式'
 
 const selectedStyleName = ref<string | null>(null)
 const editingStyle = ref<AssStyle | null>(null)
-const manualRoleOverrides = ref<Record<string, BilingualRole | 'auto'>>({})
 const selectedTrack = ref<number | null>(null)
 const trackStyleBindings = ref<Record<number, string>>({})
+const renameDialogVisible = ref(false)
+const renameSourceName = ref('')
+const renameDraft = ref('')
+const renameError = ref('')
 
 // Watch for store styles changes
 const projectStyles = computed(() => store.styles)
@@ -29,24 +33,8 @@ const playResY = computed(() => {
   const value = Number(store.currentFile?.scriptInfo?.PlayResY)
   return Number.isFinite(value) && value > 0 ? value : 1080
 })
-const autoStyleRoles = computed(() => detectBilingualStyleRoles(store.items, store.styles))
-const resolvedStyleRoles = computed(() => {
-  const resolved: Record<string, ReturnType<typeof detectBilingualStyleRoles>[string]> = {}
-  for (const style of store.styles) {
-    const auto = autoStyleRoles.value[style.name] ?? { role: 'neutral' as BilingualRole, confidence: 0, reason: '无可用信息' }
-    const manual = manualRoleOverrides.value[style.name]
-    if (manual && manual !== 'auto') {
-      resolved[style.name] = {
-        role: manual,
-        confidence: 1,
-        reason: '手动标记',
-      }
-    } else {
-      resolved[style.name] = auto
-    }
-  }
-  return resolved
-})
+const resolvedStyleRoles = computed(() => detectBilingualStyleRoles(store.items, store.styles))
+const validStyleNameSet = computed(() => new Set(store.styles.map(style => style.name)))
 
 const itemTrackMap = computed(() => {
   const map = new Map<string, number>()
@@ -54,7 +42,9 @@ const itemTrackMap = computed(() => {
   let nextTrack = 1
 
   for (const item of store.items) {
-    const styleName = item.style || 'Default'
+    const styleName = item.style?.trim() && validStyleNameSet.value.has(item.style)
+      ? item.style
+      : UNIFIED_STYLE_PLACEHOLDER
     if (!styleOrder.has(styleName)) {
       styleOrder.set(styleName, nextTrack++)
     }
@@ -76,7 +66,10 @@ const trackSummaries = computed(() => {
   const tracks = Array.from(byTrack.entries())
     .sort((a, b) => a[0] - b[0])
     .map(([track, items]) => {
-      const dominantStyle = items[0]?.style || store.styles[0]?.name || 'Default'
+      const firstStyle = items[0]?.style?.trim() || ''
+      const dominantStyle = firstStyle && validStyleNameSet.value.has(firstStyle)
+        ? firstStyle
+        : UNIFIED_STYLE_PLACEHOLDER
       return {
         track,
         itemCount: items.length,
@@ -110,13 +103,23 @@ watch(projectStyles, (styles) => {
 }, { immediate: true })
 
 watch(trackSummaries, (tracks) => {
-  if (tracks.length > 0 && !selectedTrack.value) {
-    selectedTrack.value = tracks[0].track
+  if (tracks.length === 0) {
+    selectedTrack.value = null
+    trackStyleBindings.value = {}
+    return
   }
+
+  const nextBindings: Record<number, string> = {}
   for (const track of tracks) {
-    if (!trackStyleBindings.value[track.track]) {
-      trackStyleBindings.value[track.track] = track.dominantStyle
-    }
+    // Keep binding in sync with latest detected dominant style after split/normalize.
+    nextBindings[track.track] = track.dominantStyle
+  }
+  trackStyleBindings.value = nextBindings
+
+  const hasSelectedTrack = selectedTrack.value !== null
+    && tracks.some(track => track.track === selectedTrack.value)
+  if (!hasSelectedTrack) {
+    selectedTrack.value = tracks[0].track
   }
 }, { immediate: true })
 
@@ -178,6 +181,37 @@ function handleDelete(styleName: string) {
   }
 }
 
+function handleRename(styleName: string) {
+  renameSourceName.value = styleName
+  renameDraft.value = styleName
+  renameError.value = ''
+  renameDialogVisible.value = true
+}
+
+function closeRenameDialog() {
+  renameDialogVisible.value = false
+  renameSourceName.value = ''
+  renameDraft.value = ''
+  renameError.value = ''
+}
+
+function submitRenameDialog() {
+  const result = store.renameStyle(renameSourceName.value, renameDraft.value)
+  if (!result.ok) {
+    renameError.value = result.reason
+    return
+  }
+
+  if (result.appliedName) {
+    selectedStyleName.value = result.appliedName
+    const updated = store.styles.find(style => style.name === result.appliedName)
+    if (updated) {
+      editingStyle.value = { ...updated }
+    }
+  }
+  closeRenameDialog()
+}
+
 function handleApplyPreset(presetId: string) {
   const presetStyle = createStyleFromPreset(presetId)
   if (!presetStyle) return
@@ -207,16 +241,8 @@ function handleStyleUpdate(updatedStyle: AssStyle) {
   store.updateStyle(previousName, updatedStyle)
 
   if (updatedStyle.name !== previousName) {
-    if (manualRoleOverrides.value[previousName]) {
-      manualRoleOverrides.value[updatedStyle.name] = manualRoleOverrides.value[previousName]
-      delete manualRoleOverrides.value[previousName]
-    }
     selectedStyleName.value = updatedStyle.name
   }
-}
-
-function handleRoleChange(styleName: string, role: BilingualRole | 'auto') {
-  manualRoleOverrides.value[styleName] = role
 }
 
 function handleTrackSelect(track: number) {
@@ -230,6 +256,7 @@ function handleTrackBindingUpdate(track: number, styleName: string) {
 function handleApplyTrackStyle(track: number) {
   const targetStyle = trackStyleBindings.value[track]
   if (!targetStyle) return
+  if (!store.styles.some(style => style.name === targetStyle)) return
   store.items
     .filter(item => itemTrackMap.value.get(item.id) === track)
     .forEach(item => {
@@ -265,13 +292,12 @@ function handleApplyTrackStyle(track: number) {
           :styles="projectStyles"
           :selected-style-name="selectedStyleName"
           :style-roles="resolvedStyleRoles"
-          :manual-role-overrides="manualRoleOverrides"
           @select="handleSelect"
           @new="handleNew"
           @copy="handleCopy"
+          @rename="handleRename"
           @delete="handleDelete"
           @apply-preset="handleApplyPreset"
-          @role-change="handleRoleChange"
         />
       </div>
 
@@ -308,6 +334,24 @@ function handleApplyTrackStyle(track: number) {
             <p class="empty-hint">点击左侧"新建"按钮创建样式</p>
           </div>
         </template>
+      </div>
+    </div>
+  </div>
+  <div v-if="renameDialogVisible" class="rename-overlay" @click.self="closeRenameDialog">
+    <div class="rename-modal">
+      <h4 class="rename-title">重命名样式</h4>
+      <p class="rename-desc">当前：{{ renameSourceName }}</p>
+      <input
+        v-model="renameDraft"
+        class="rename-input"
+        type="text"
+        placeholder="输入新的样式名称"
+        @keydown.enter.prevent="submitRenameDialog"
+      />
+      <p v-if="renameError" class="rename-error">{{ renameError }}</p>
+      <div class="rename-actions">
+        <button class="rename-btn ghost" @click="closeRenameDialog">取消</button>
+        <button class="rename-btn primary" @click="submitRenameDialog">确认重命名</button>
       </div>
     </div>
   </div>
@@ -418,6 +462,79 @@ function handleApplyTrackStyle(track: number) {
 .empty-hint {
   font-size: 0.875rem;
   color: #9ca3af;
+}
+
+.rename-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 140;
+  background: rgba(15, 23, 42, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.rename-modal {
+  width: min(420px, 94vw);
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.75rem;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.15);
+  padding: 0.95rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.rename-title {
+  margin: 0;
+  font-size: 1rem;
+  color: #111827;
+}
+
+.rename-desc {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: #6b7280;
+}
+
+.rename-input {
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.65rem;
+  font-size: 0.875rem;
+  color: #111827;
+}
+
+.rename-error {
+  margin: 0;
+  color: #b91c1c;
+  font-size: 0.8rem;
+}
+
+.rename-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.rename-btn {
+  border: 1px solid transparent;
+  border-radius: 0.5rem;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.8125rem;
+}
+
+.rename-btn.ghost {
+  border-color: #d1d5db;
+  background: #fff;
+  color: #374151;
+}
+
+.rename-btn.primary {
+  background: #2563eb;
+  color: #fff;
 }
 
 @media (max-width: 1600px) {

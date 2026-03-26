@@ -5,6 +5,7 @@ import { useFileExport } from './composables/useFileExport'
 import { useKeyboardShortcuts } from './composables/useKeyboardShortcuts'
 import { FileInput, SourceDiffModal, StyleSelectionModal } from './components/common'
 import { SubtitleTable } from './components/table'
+import { MainToolbar } from './components/toolbar'
 import { StyleEditor } from './components/style-editor'
 import {
   parseAss,
@@ -259,10 +260,15 @@ function applyStructureNormalization(selectedStyleIds: string[]) {
           </div>
 
           <!-- Table View -->
-          <SubtitleTable v-if="currentView === 'table'" class="max-h-96" />
+          <template v-if="currentView === 'table'">
+            <SubtitleTable class="max-h-96" />
+          </template>
 
           <!-- Styles View -->
-          <StyleEditor v-else-if="currentView === 'styles'" />
+          <template v-else-if="currentView === 'styles'">
+            <MainToolbar mode="split-only" />
+            <StyleEditor />
+          </template>
         </div>
       </div>
     </main>

@@ -7,16 +7,15 @@ const props = defineProps<{
   styles: AssStyle[]
   selectedStyleName: string | null
   styleRoles?: Record<string, StyleRoleInfo>
-  manualRoleOverrides?: Record<string, BilingualRole | 'auto'>
 }>()
 
 const emit = defineEmits<{
   (e: 'select', styleName: string): void
   (e: 'new'): void
   (e: 'copy', styleName: string): void
+  (e: 'rename', styleName: string): void
   (e: 'delete', styleName: string): void
   (e: 'applyPreset', presetId: string): void
-  (e: 'roleChange', styleName: string, role: BilingualRole | 'auto'): void
 }>()
 
 function handleSelect(styleName: string) {
@@ -30,6 +29,12 @@ function handleNew() {
 function handleCopy() {
   if (props.selectedStyleName) {
     emit('copy', props.selectedStyleName)
+  }
+}
+
+function handleRename() {
+  if (props.selectedStyleName) {
+    emit('rename', props.selectedStyleName)
   }
 }
 
@@ -64,10 +69,6 @@ function getRoleClass(role: BilingualRole): string {
   return 'role-neutral'
 }
 
-function handleRoleSelect(styleName: string, event: Event) {
-  const value = (event.target as HTMLSelectElement).value as BilingualRole | 'auto'
-  emit('roleChange', styleName, value)
-}
 </script>
 
 <template>
@@ -101,6 +102,17 @@ function handleRoleSelect(styleName: string, event: Event) {
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
           </svg>
           <span>复制</span>
+        </button>
+        <button
+          class="action-btn"
+          @click="handleRename"
+          :disabled="!selectedStyleName"
+          title="重命名当前样式"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5h2m-7 7l9-9a2.828 2.828 0 114 4l-9 9-4 1 1-4z"/>
+          </svg>
+          <span>重命名</span>
         </button>
         <button
           class="action-btn danger"
@@ -139,19 +151,6 @@ function handleRoleSelect(styleName: string, event: Event) {
             <span v-if="styleRoles?.[style.name]" class="style-confidence">
               识别置信度 {{ Math.round(styleRoles[style.name].confidence * 100) }}% · {{ styleRoles[style.name].reason }}
             </span>
-            <label class="role-select-row" @click.stop>
-              <span>角色</span>
-              <select
-                class="role-select"
-                :value="manualRoleOverrides?.[style.name] ?? 'auto'"
-                @change="handleRoleSelect(style.name, $event)"
-              >
-                <option value="auto">自动</option>
-                <option value="primary">主语言</option>
-                <option value="secondary">副语言</option>
-                <option value="neutral">中性</option>
-              </select>
-            </label>
           </div>
           <div class="style-preview-mini" :style="{ fontFamily: style.fontName }">
             Aa
@@ -230,22 +229,37 @@ function handleRoleSelect(styleName: string, event: Event) {
 }
 
 .action-buttons {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.5rem;
 }
 
 .action-btn {
   display: flex;
   align-items: center;
-  gap: 0.375rem;
-  padding: 0.5rem 0.75rem;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 42px;
+  padding: 0.45rem 0.6rem;
   border: 1px solid #d1d5db;
-  border-radius: 0.375rem;
+  border-radius: 0.55rem;
   background-color: white;
   color: #374151;
-  font-size: 0.875rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1;
   cursor: pointer;
   transition: all 0.15s ease;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.action-btn span {
+  white-space: nowrap;
+}
+
+.action-btn svg {
+  flex: 0 0 auto;
 }
 
 .action-btn:hover:not(:disabled) {
@@ -259,9 +273,10 @@ function handleRoleSelect(styleName: string, event: Event) {
 }
 
 .action-btn.primary {
-  background-color: #3b82f6;
-  border-color: #3b82f6;
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  border-color: #2563eb;
   color: white;
+  box-shadow: 0 4px 10px rgba(37, 99, 235, 0.2);
 }
 
 .action-btn.primary:hover:not(:disabled) {
@@ -356,23 +371,6 @@ function handleRoleSelect(styleName: string, event: Event) {
 .role-neutral {
   background-color: #f3f4f6;
   color: #4b5563;
-}
-
-.role-select-row {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-size: 0.7rem;
-  color: #6b7280;
-}
-
-.role-select {
-  border: 1px solid #d1d5db;
-  border-radius: 0.3rem;
-  background-color: white;
-  font-size: 0.7rem;
-  padding: 0.05rem 0.3rem;
-  color: #374151;
 }
 
 .style-preview-mini {

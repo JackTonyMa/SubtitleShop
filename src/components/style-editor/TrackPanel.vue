@@ -5,7 +5,7 @@ export interface TrackSummary {
   dominantStyle: string
 }
 
-defineProps<{
+const props = defineProps<{
   tracks: TrackSummary[]
   selectedTrack: number | null
   trackStyleBindings: Record<number, string>
@@ -21,6 +21,10 @@ const emit = defineEmits<{
 function handleBindingChange(track: number, event: Event) {
   const value = (event.target as HTMLSelectElement).value
   emit('updateBinding', track, value)
+}
+
+function getBindingValue(track: TrackSummary): string {
+  return props.trackStyleBindings[track.track] || track.dominantStyle
 }
 </script>
 
@@ -50,9 +54,16 @@ function handleBindingChange(track: number, event: Event) {
         <div class="track-controls" @click.stop>
           <select
             class="track-select"
-            :value="trackStyleBindings[track.track] || track.dominantStyle"
+            :value="getBindingValue(track)"
             @change="handleBindingChange(track.track, $event)"
           >
+            <option
+              v-if="!styleNames.includes(getBindingValue(track))"
+              :value="getBindingValue(track)"
+              disabled
+            >
+              {{ getBindingValue(track) }}
+            </option>
             <option
               v-for="styleName in styleNames"
               :key="styleName"
