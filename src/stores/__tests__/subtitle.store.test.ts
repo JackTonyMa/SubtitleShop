@@ -38,7 +38,7 @@ describe('subtitle store style updates', () => {
     expect(store.items.every(item => item.style === '白-黑')).toBe(true)
   })
 
-  it('splits bilingual ass line into two rows and extracts inline style overrides', () => {
+  it('splits bilingual ass line by line break and assigns CHS/ENG style names', () => {
     const store = useSubtitleStore()
     store.styles = [createAssStyle({ name: 'Default', fontName: 'Arial', fontSize: 20 })]
     store.items = [
@@ -69,10 +69,9 @@ describe('subtitle store style updates', () => {
     const chsStyle = store.styles.find(style => style.name === 'CHS')
     expect(engStyle).toBeTruthy()
     expect(chsStyle).toBeTruthy()
-    expect(engStyle?.fontName).toBe('Open Sans')
-    expect(engStyle?.fontSize).toBe(9)
-    expect(engStyle?.primaryColor).toBe('&H00E6E6&')
-    expect(chsStyle?.fontSize).toBe(18)
+    expect(engStyle?.fontName).toBe('Arial')
+    expect(engStyle?.fontSize).toBe(20)
+    expect(chsStyle?.fontSize).toBe(20)
   })
 
   it('reuses extracted styles across multiple split rows to avoid style explosion', () => {

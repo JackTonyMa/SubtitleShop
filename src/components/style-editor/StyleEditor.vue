@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import { useSubtitleStore } from '../../stores/subtitle'
 import { createAssStyle } from '../../core/models/AssStyle'
 import type { AssStyle } from '../../core/models/AssStyle'
-import { createStyleFromPreset } from '../preset-styles'
+import { createStyleFromPreset, PRESET_STYLES } from '../preset-styles'
 import { detectBilingualStyleRoles } from '../../utils/bilingualDetection'
 import type { SubtitleItem } from '../../core/models/SubtitleItem'
 import StyleList from './StyleList.vue'
@@ -15,16 +15,32 @@ const store = useSubtitleStore()
 const UNIFIED_STYLE_PLACEHOLDER = '无统一样式'
 
 const selectedStyleName = ref<string | null>(null)
+const pinnedStyleName = ref<string | null>(null)
 const editingStyle = ref<AssStyle | null>(null)
+const previewPresetStyle = ref<AssStyle | null>(null)
+const previewPresetName = ref('')
+const editorContentRef = ref<HTMLElement | null>(null)
 const selectedTrack = ref<number | null>(null)
 const trackStyleBindings = ref<Record<number, string>>({})
+const hideLowShareTracks = ref(true)
 const renameDialogVisible = ref(false)
 const renameSourceName = ref('')
 const renameDraft = ref('')
 const renameError = ref('')
+const trackChangeConfirmVisible = ref(false)
+const pendingTrackChange = ref<{ track: number; nextStyle: string } | null>(null)
 
 // Watch for store styles changes
-const projectStyles = computed(() => store.styles)
+const projectStyles = computed(() => {
+  const list = [...store.styles]
+  const pinned = pinnedStyleName.value
+  if (!pinned) return list
+
+  const index = list.findIndex(style => style.name === pinned)
+  if (index <= 0) return list
+  const [hit] = list.splice(index, 1)
+  return [hit, ...list]
+})
 const playResX = computed(() => {
   const value = Number(store.currentFile?.scriptInfo?.PlayResX)
   return Number.isFinite(value) && value > 0 ? value : 1920
@@ -33,6 +49,10 @@ const playResY = computed(() => {
   const value = Number(store.currentFile?.scriptInfo?.PlayResY)
   return Number.isFinite(value) && value > 0 ? value : 1080
 })
+const presetOptions = computed(() => PRESET_STYLES.map(preset => ({
+  id: preset.id,
+  name: preset.name,
+})))
 const resolvedStyleRoles = computed(() => detectBilingualStyleRoles(store.items, store.styles))
 const validStyleNameSet = computed(() => new Set(store.styles.map(style => style.name)))
 
@@ -64,21 +84,70 @@ const trackSummaries = computed(() => {
   }
 
   const tracks = Array.from(byTrack.entries())
-    .sort((a, b) => a[0] - b[0])
     .map(([track, items]) => {
       const firstStyle = items[0]?.style?.trim() || ''
       const dominantStyle = firstStyle && validStyleNameSet.value.has(firstStyle)
         ? firstStyle
         : UNIFIED_STYLE_PLACEHOLDER
+      const languageMeta = inferTrackLanguageMeta(items, dominantStyle)
       return {
         track,
         itemCount: items.length,
         dominantStyle,
+        languageLabel: languageMeta.label,
+        languageConfidence: languageMeta.confidence,
       }
+    })
+    .sort((a, b) => {
+      if (b.itemCount !== a.itemCount) return b.itemCount - a.itemCount
+      return a.track - b.track
     })
 
   return tracks
 })
+
+const visibleTrackSummaries = computed(() => {
+  if (!hideLowShareTracks.value) return trackSummaries.value
+  const total = Math.max(store.items.length, 1)
+  return trackSummaries.value.filter(track => (track.itemCount / total) >= 0.1)
+})
+
+const hiddenTrackCount = computed(() => {
+  const hidden = trackSummaries.value.length - visibleTrackSummaries.value.length
+  return hidden > 0 ? hidden : 0
+})
+
+function inferTrackLanguageMeta(
+  items: SubtitleItem[],
+  dominantStyle: string
+): { label: '中文' | '英文' | '中性'; confidence: number } {
+  if (dominantStyle !== UNIFIED_STYLE_PLACEHOLDER) {
+    const roleInfo = resolvedStyleRoles.value[dominantStyle]
+    if (roleInfo?.role === 'primary') {
+      return { label: '中文', confidence: Math.round(roleInfo.confidence * 100) }
+    }
+    if (roleInfo?.role === 'secondary') {
+      return { label: '英文', confidence: Math.round(roleInfo.confidence * 100) }
+    }
+  }
+
+  let cjkCount = 0
+  let latinCount = 0
+  for (const item of items) {
+    const text = item.text || ''
+    const hasCjk = /[\u3400-\u9fff]/.test(text)
+    const hasLatin = /[A-Za-z]/.test(text)
+    if (hasCjk) cjkCount++
+    if (hasLatin) latinCount++
+  }
+
+  const total = cjkCount + latinCount
+  if (total === 0) return { label: '中性', confidence: 0 }
+  if (cjkCount >= latinCount) {
+    return { label: '中文', confidence: Math.round((cjkCount / total) * 100) }
+  }
+  return { label: '英文', confidence: Math.round((latinCount / total) * 100) }
+}
 
 // Keep local editing state synced with store styles (including reload after structure fix).
 watch(projectStyles, (styles) => {
@@ -111,14 +180,27 @@ watch(trackSummaries, (tracks) => {
 
   const nextBindings: Record<number, string> = {}
   for (const track of tracks) {
-    // Keep binding in sync with latest detected dominant style after split/normalize.
-    nextBindings[track.track] = track.dominantStyle
+    const current = trackStyleBindings.value[track.track]
+    nextBindings[track.track] = current && store.styles.some(style => style.name === current)
+      ? current
+      : track.dominantStyle
   }
   trackStyleBindings.value = nextBindings
 
   const hasSelectedTrack = selectedTrack.value !== null
-    && tracks.some(track => track.track === selectedTrack.value)
+    && visibleTrackSummaries.value.some(track => track.track === selectedTrack.value)
   if (!hasSelectedTrack) {
+    selectedTrack.value = visibleTrackSummaries.value[0]?.track ?? null
+  }
+}, { immediate: true })
+
+watch(visibleTrackSummaries, (tracks) => {
+  if (tracks.length === 0) {
+    selectedTrack.value = null
+    return
+  }
+  const exists = selectedTrack.value !== null && tracks.some(track => track.track === selectedTrack.value)
+  if (!exists) {
     selectedTrack.value = tracks[0].track
   }
 }, { immediate: true })
@@ -133,11 +215,25 @@ watch(selectedStyleName, (name) => {
   }
 })
 
+watch(
+  () => [selectedStyleName.value, previewPresetName.value],
+  async () => {
+    await nextTick()
+    if (editorContentRef.value) {
+      editorContentRef.value.scrollTop = 0
+    }
+  }
+)
+
 function handleSelect(styleName: string) {
+  previewPresetStyle.value = null
+  previewPresetName.value = ''
   selectedStyleName.value = styleName
 }
 
 function handleNew() {
+  previewPresetStyle.value = null
+  previewPresetName.value = ''
   // Find a unique name
   let index = 1
   let name = 'New Style'
@@ -153,6 +249,8 @@ function handleNew() {
 }
 
 function handleCopy(styleName: string) {
+  previewPresetStyle.value = null
+  previewPresetName.value = ''
   const style = store.styles.find(s => s.name === styleName)
   if (!style) return
 
@@ -174,6 +272,8 @@ function handleCopy(styleName: string) {
 }
 
 function handleDelete(styleName: string) {
+  previewPresetStyle.value = null
+  previewPresetName.value = ''
   store.removeStyle(styleName)
   if (selectedStyleName.value === styleName) {
     selectedStyleName.value = store.styles[0]?.name || null
@@ -182,6 +282,8 @@ function handleDelete(styleName: string) {
 }
 
 function handleRename(styleName: string) {
+  previewPresetStyle.value = null
+  previewPresetName.value = ''
   renameSourceName.value = styleName
   renameDraft.value = styleName
   renameError.value = ''
@@ -212,28 +314,9 @@ function submitRenameDialog() {
   closeRenameDialog()
 }
 
-function handleApplyPreset(presetId: string) {
-  const presetStyle = createStyleFromPreset(presetId)
-  if (!presetStyle) return
-
-  // Find a unique name
-  let index = 1
-  let name = presetStyle.name
-  while (store.styles.some(s => s.name === name)) {
-    name = `${presetStyle.name} ${index}`
-    index++
-  }
-
-  const newStyle = createAssStyle({
-    ...presetStyle,
-    name,
-  })
-  store.addStyle(newStyle)
-  selectedStyleName.value = name
-  editingStyle.value = { ...newStyle }
-}
-
 function handleStyleUpdate(updatedStyle: AssStyle) {
+  previewPresetStyle.value = null
+  previewPresetName.value = ''
   const previousName = selectedStyleName.value
   editingStyle.value = updatedStyle
   if (!previousName) return
@@ -247,10 +330,32 @@ function handleStyleUpdate(updatedStyle: AssStyle) {
 
 function handleTrackSelect(track: number) {
   selectedTrack.value = track
+  syncSelectedStyleByTrack(track)
 }
 
-function handleTrackBindingUpdate(track: number, styleName: string) {
-  trackStyleBindings.value[track] = styleName
+function handleToggleHideLowShareTracks(value: boolean) {
+  hideLowShareTracks.value = value
+}
+
+function handleTrackBindingUpdate(track: number, value: string) {
+  const currentStyle = getCurrentTrackAppliedStyle(track)
+  let nextStyleName = ''
+
+  if (value.startsWith('style:')) {
+    nextStyleName = value.slice('style:'.length)
+  }
+  if (!nextStyleName && value.startsWith('preset:')) {
+    const presetId = value.slice('preset:'.length)
+    const importedStyleName = ensurePresetStyle(presetId)
+    if (importedStyleName) {
+      nextStyleName = importedStyleName
+    }
+  }
+  if (!nextStyleName) return
+  if (currentStyle === nextStyleName) return
+
+  pendingTrackChange.value = { track, nextStyle: nextStyleName }
+  trackChangeConfirmVisible.value = true
 }
 
 function handleApplyTrackStyle(track: number) {
@@ -262,6 +367,108 @@ function handleApplyTrackStyle(track: number) {
     .forEach(item => {
       store.updateItem(item.id, { style: targetStyle })
     })
+}
+
+function getCurrentTrackAppliedStyle(track: number): string {
+  const bound = trackStyleBindings.value[track]
+  if (bound && store.styles.some(style => style.name === bound)) {
+    return bound
+  }
+  const summary = trackSummaries.value.find(item => item.track === track)
+  if (!summary) return ''
+  return store.styles.some(style => style.name === summary.dominantStyle)
+    ? summary.dominantStyle
+    : ''
+}
+
+function closeTrackChangeConfirm() {
+  trackChangeConfirmVisible.value = false
+  pendingTrackChange.value = null
+}
+
+function submitTrackChangeConfirm() {
+  const payload = pendingTrackChange.value
+  if (!payload) return
+  trackStyleBindings.value[payload.track] = payload.nextStyle
+  pinnedStyleName.value = payload.nextStyle
+  previewPresetStyle.value = null
+  previewPresetName.value = ''
+  selectedStyleName.value = payload.nextStyle
+  handleApplyTrackStyle(payload.track)
+  closeTrackChangeConfirm()
+}
+
+function syncSelectedStyleByTrack(track: number) {
+  const summary = trackSummaries.value.find(item => item.track === track)
+  if (!summary) return
+
+  const boundStyle = trackStyleBindings.value[track]
+  const candidate = (boundStyle && store.styles.some(style => style.name === boundStyle))
+    ? boundStyle
+    : summary.dominantStyle
+
+  if (!candidate || !store.styles.some(style => style.name === candidate)) return
+  pinnedStyleName.value = candidate
+  previewPresetStyle.value = null
+  previewPresetName.value = ''
+  selectedStyleName.value = candidate
+}
+
+function handlePreviewPreset(presetId: string) {
+  const style = createStyleFromPreset(presetId)
+  if (!style) return
+  previewPresetStyle.value = style
+  previewPresetName.value = style.name
+}
+
+function ensurePresetStyle(presetId: string): string | null {
+  const presetStyle = createStyleFromPreset(presetId)
+  if (!presetStyle) return null
+
+  const signature = buildStyleSignatureWithoutName(presetStyle)
+  const existingBySignature = store.styles.find(style => buildStyleSignatureWithoutName(style) === signature)
+  if (existingBySignature) return existingBySignature.name
+
+  let nextName = presetStyle.name
+  let index = 2
+  while (store.styles.some(style => style.name === nextName)) {
+    nextName = `${presetStyle.name}_${index}`
+    index++
+  }
+
+  const newStyle = createAssStyle({
+    ...presetStyle,
+    name: nextName,
+  })
+  store.addStyle(newStyle)
+  return nextName
+}
+
+function buildStyleSignatureWithoutName(style: Omit<AssStyle, 'name'> | AssStyle): string {
+  return [
+    style.fontName,
+    style.fontSize,
+    style.primaryColor,
+    style.secondaryColor,
+    style.outlineColor,
+    style.backColor,
+    style.bold ? 1 : 0,
+    style.italic ? 1 : 0,
+    style.underline ? 1 : 0,
+    style.strikeOut ? 1 : 0,
+    style.scaleX,
+    style.scaleY,
+    style.spacing,
+    style.angle,
+    style.borderStyle,
+    style.outline,
+    style.shadow,
+    style.alignment,
+    style.marginL,
+    style.marginR,
+    style.marginV,
+    style.encoding,
+  ].join('|')
 }
 </script>
 
@@ -276,13 +483,16 @@ function handleApplyTrackStyle(track: number) {
       <!-- Left: Tracks -->
       <div class="editor-sidebar tracks-sidebar">
         <TrackPanel
-          :tracks="trackSummaries"
+          :tracks="visibleTrackSummaries"
+          :hidden-track-count="hiddenTrackCount"
           :selected-track="selectedTrack"
           :track-style-bindings="trackStyleBindings"
           :style-names="projectStyles.map(style => style.name)"
+          :preset-options="presetOptions"
+          :hide-low-share-tracks="hideLowShareTracks"
           @select="handleTrackSelect"
           @update-binding="handleTrackBindingUpdate"
-          @apply-track="handleApplyTrackStyle"
+          @update-hide-low-share-tracks="handleToggleHideLowShareTracks"
         />
       </div>
 
@@ -297,13 +507,38 @@ function handleApplyTrackStyle(track: number) {
           @copy="handleCopy"
           @rename="handleRename"
           @delete="handleDelete"
-          @apply-preset="handleApplyPreset"
+          @preview-preset="handlePreviewPreset"
         />
       </div>
 
       <!-- Right: Form + Preview -->
-      <div class="editor-content">
-        <template v-if="editingStyle">
+      <div ref="editorContentRef" class="editor-content">
+        <template v-if="previewPresetStyle">
+          <div class="content-split">
+            <div class="form-section">
+              <h3 class="section-title">预设预览（只读）</h3>
+              <div class="rounded border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+                {{ previewPresetName }}
+              </div>
+              <StyleForm
+                :model-value="previewPresetStyle"
+                :play-res-x="playResX"
+                :play-res-y="playResY"
+                :readonly="true"
+              />
+            </div>
+            <div class="preview-section">
+              <h3 class="section-title">实时预览</h3>
+              <StylePreview
+                :style="previewPresetStyle"
+                :play-res-x="playResX"
+                :play-res-y="playResY"
+                preview-text="字幕预览文本\nSubtitle Preview"
+              />
+            </div>
+          </div>
+        </template>
+        <template v-else-if="editingStyle">
           <div class="content-split">
             <div class="form-section">
               <h3 class="section-title">样式设置</h3>
@@ -355,13 +590,27 @@ function handleApplyTrackStyle(track: number) {
       </div>
     </div>
   </div>
+  <div v-if="trackChangeConfirmVisible" class="rename-overlay" @click.self="closeTrackChangeConfirm">
+    <div class="rename-modal">
+      <h4 class="rename-title">确认变更轨道样式</h4>
+      <p class="rename-desc">
+        是否将轨道 {{ pendingTrackChange?.track }} 的字幕样式变更为
+        {{ pendingTrackChange?.nextStyle }}？
+      </p>
+      <div class="rename-actions">
+        <button class="rename-btn ghost" @click="closeTrackChangeConfirm">取消</button>
+        <button class="rename-btn primary" @click="submitTrackChangeConfirm">确认变更</button>
+      </div>
+    </div>
+  </div>
 </template>
 
 <style scoped>
 .style-editor {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  height: min(78vh, 900px);
+  min-height: 560px;
   background-color: white;
   border: 1px solid #e5e7eb;
   border-radius: 0.5rem;
@@ -391,22 +640,28 @@ function handleApplyTrackStyle(track: number) {
 .editor-body {
   display: flex;
   flex: 1;
-  overflow: auto;
+  overflow: hidden;
+  min-height: 0;
 }
 
 .editor-sidebar {
   width: 260px;
   flex-shrink: 0;
   border-right: 1px solid #e5e7eb;
-  overflow-y: auto;
+  overflow: hidden;
+  min-height: 0;
 }
 
 .tracks-sidebar {
   width: 220px;
+  overflow-y: auto;
 }
 
 .styles-sidebar {
   width: 280px;
+  display: flex;
+  overflow: hidden;
+  min-height: 0;
 }
 
 .editor-content {

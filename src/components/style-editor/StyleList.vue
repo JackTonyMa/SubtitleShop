@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { AssStyle } from '../../core/models/AssStyle'
-import type { BilingualRole, StyleRoleInfo } from '../../utils/bilingualDetection'
+import type { StyleRoleInfo } from '../../utils/bilingualDetection'
 import { PRESET_STYLES } from '../../components/preset-styles'
 
 const props = defineProps<{
@@ -15,7 +15,7 @@ const emit = defineEmits<{
   (e: 'copy', styleName: string): void
   (e: 'rename', styleName: string): void
   (e: 'delete', styleName: string): void
-  (e: 'applyPreset', presetId: string): void
+  (e: 'previewPreset', presetId: string): void
 }>()
 
 function handleSelect(styleName: string) {
@@ -44,8 +44,8 @@ function handleDelete() {
   }
 }
 
-function handleApplyPreset(presetId: string) {
-  emit('applyPreset', presetId)
+function handlePreviewPreset(presetId: string) {
+  emit('previewPreset', presetId)
 }
 
 function getStyleSummary(style: AssStyle): string {
@@ -55,18 +55,6 @@ function getStyleSummary(style: AssStyle): string {
   if (style.outline > 0) features.push(`描${style.outline}`)
   if (style.shadow > 0) features.push(`影${style.shadow}`)
   return features.join(' ') || '默认'
-}
-
-function getRoleLabel(role: BilingualRole): string {
-  if (role === 'primary') return '主语言'
-  if (role === 'secondary') return '副语言'
-  return '中性'
-}
-
-function getRoleClass(role: BilingualRole): string {
-  if (role === 'primary') return 'role-primary'
-  if (role === 'secondary') return 'role-secondary'
-  return 'role-neutral'
 }
 
 </script>
@@ -139,13 +127,6 @@ function getRoleClass(role: BilingualRole): string {
           <div class="style-item-content">
             <span class="style-name-row">
               <span class="style-name">{{ style.name }}</span>
-              <span
-                v-if="styleRoles?.[style.name]"
-                class="role-badge"
-                :class="getRoleClass(styleRoles[style.name].role)"
-              >
-                {{ getRoleLabel(styleRoles[style.name].role) }}
-              </span>
             </span>
             <span class="style-summary">{{ getStyleSummary(style) }}</span>
             <span v-if="styleRoles?.[style.name]" class="style-confidence">
@@ -170,8 +151,9 @@ function getRoleClass(role: BilingualRole): string {
           v-for="preset in PRESET_STYLES"
           :key="preset.id"
           class="preset-item"
-          @click="handleApplyPreset(preset.id)"
-          title="点击应用此预设"
+          type="button"
+          @click="handlePreviewPreset(preset.id)"
+          title="预设样式（仅展示）"
         >
           <div class="preset-icon" :style="{
             fontFamily: preset.style.fontName,
@@ -197,6 +179,7 @@ function getRoleClass(role: BilingualRole): string {
   gap: 1.5rem;
   padding: 1rem;
   height: 100%;
+  min-height: 0;
   overflow-y: auto;
 }
 
@@ -349,28 +332,6 @@ function getRoleClass(role: BilingualRole): string {
   font-size: 0.7rem;
   color: #6b7280;
   line-height: 1.3;
-}
-
-.role-badge {
-  font-size: 0.65rem;
-  border-radius: 999px;
-  padding: 0.1rem 0.4rem;
-  font-weight: 600;
-}
-
-.role-primary {
-  background-color: #dbeafe;
-  color: #1d4ed8;
-}
-
-.role-secondary {
-  background-color: #dcfce7;
-  color: #166534;
-}
-
-.role-neutral {
-  background-color: #f3f4f6;
-  color: #4b5563;
 }
 
 .style-preview-mini {

@@ -357,11 +357,6 @@ export const useSubtitleStore = defineStore('subtitle', () => {
 
     const styleByName = new Map(styles.value.map(style => [style.name, style]))
     const existingStyleNames = new Set(styles.value.map(style => style.name))
-    const styleSignatureToName = new Map<string, string>()
-    for (const style of styles.value) {
-      styleSignatureToName.set(buildStyleSignature(style), style.name)
-    }
-
     const nextStyles = [...styles.value]
     const nextItems: SubtitleItem[] = []
     let changedCount = 0
@@ -386,36 +381,19 @@ export const useSubtitleStore = defineStore('subtitle', () => {
         ? item.style
         : (styles.value[0]?.name || 'Default')
       const baseStyle = styleByName.get(baseStyleName) || createDefaultStyle()
-      const baseSignature = buildStyleSignature(baseStyle)
 
       const orderedSegments = [...segments].reverse()
       for (let index = 0; index < orderedSegments.length; index++) {
         const segment = orderedSegments[index]
-        const overrides = extractLeadingAssStyleOverrides(segment)
-        let resolvedStyleName = baseStyleName
         const plainSegmentText = stripAssTags(segment)
-
-        if (Object.keys(overrides).length > 0) {
-          const resolvedStyle = createAssStyle({
-            ...baseStyle,
-            ...overrides,
-            name: baseStyle.name,
-          })
-          const signature = buildStyleSignature(resolvedStyle)
-
-          if (signature !== baseSignature) {
-            resolvedStyleName = styleSignatureToName.get(signature) || ''
-            if (!resolvedStyleName) {
-              const candidateBaseName = inferSplitStyleBaseName(plainSegmentText, baseStyleName, index)
-              resolvedStyleName = createUniqueStyleName(candidateBaseName, existingStyleNames)
-              existingStyleNames.add(resolvedStyleName)
-              const extractedStyle = { ...resolvedStyle, name: resolvedStyleName }
-              nextStyles.push(extractedStyle)
-              styleByName.set(resolvedStyleName, extractedStyle)
-              styleSignatureToName.set(signature, resolvedStyleName)
-            }
-          }
-        }
+        const preferredBaseName = inferSplitStyleBaseName(plainSegmentText, baseStyleName, index)
+        const resolvedStyleName = resolveOrCreateSplitStyleName(
+          preferredBaseName,
+          baseStyle,
+          styleByName,
+          existingStyleNames,
+          nextStyles
+        )
 
         nextItems.push(createSubtitleItem({
           layer: item.layer,
@@ -544,101 +522,6 @@ function createUniqueStyleName(baseName: string, existingNames: Set<string>): st
   return candidate
 }
 
-function extractLeadingAssStyleOverrides(segment: string): Partial<AssStyle> {
-  const block = collectLeadingOverrideContent(segment)
-  if (!block) return {}
-
-  const overrides: Partial<AssStyle> = {}
-
-  const fontMatch = block.match(/\\fn([^\\}]+)/)
-  if (fontMatch) overrides.fontName = fontMatch[1].trim()
-
-  const sizeMatch = block.match(/\\fs(-?\d+(?:\.\d+)?)/)
-  if (sizeMatch) overrides.fontSize = Number(sizeMatch[1])
-
-  const colorMatch = block.match(/\\1c(&H[0-9A-Fa-f]+&)/)
-  if (colorMatch) overrides.primaryColor = colorMatch[1].toUpperCase()
-
-  const boldMatch = block.match(/\\b(-?1|0)/)
-  if (boldMatch) overrides.bold = boldMatch[1] !== '0'
-
-  const italicMatch = block.match(/\\i(-?1|0)/)
-  if (italicMatch) overrides.italic = italicMatch[1] !== '0'
-
-  const underlineMatch = block.match(/\\u(-?1|0)/)
-  if (underlineMatch) overrides.underline = underlineMatch[1] !== '0'
-
-  const strikeMatch = block.match(/\\s(-?1|0)/)
-  if (strikeMatch) overrides.strikeOut = strikeMatch[1] !== '0'
-
-  const borderMatch = block.match(/\\bord(-?\d+(?:\.\d+)?)/)
-  if (borderMatch) overrides.outline = Number(borderMatch[1])
-
-  const shadowMatch = block.match(/\\shad(-?\d+(?:\.\d+)?)/)
-  if (shadowMatch) overrides.shadow = Number(shadowMatch[1])
-
-  const alignMatch = block.match(/\\an([1-9])/)
-  if (alignMatch) overrides.alignment = Number(alignMatch[1])
-
-  const scaleXMatch = block.match(/\\fscx(-?\d+(?:\.\d+)?)/)
-  if (scaleXMatch) overrides.scaleX = Number(scaleXMatch[1])
-
-  const scaleYMatch = block.match(/\\fscy(-?\d+(?:\.\d+)?)/)
-  if (scaleYMatch) overrides.scaleY = Number(scaleYMatch[1])
-
-  const spacingMatch = block.match(/\\fsp(-?\d+(?:\.\d+)?)/)
-  if (spacingMatch) overrides.spacing = Number(spacingMatch[1])
-
-  const angleMatch = block.match(/\\frz?(-?\d+(?:\.\d+)?)/)
-  if (angleMatch) overrides.angle = Number(angleMatch[1])
-
-  return overrides
-}
-
-function buildStyleSignature(style: AssStyle): string {
-  return [
-    style.fontName,
-    style.fontSize,
-    style.primaryColor,
-    style.secondaryColor,
-    style.outlineColor,
-    style.backColor,
-    style.bold ? 1 : 0,
-    style.italic ? 1 : 0,
-    style.underline ? 1 : 0,
-    style.strikeOut ? 1 : 0,
-    style.scaleX,
-    style.scaleY,
-    style.spacing,
-    style.angle,
-    style.borderStyle,
-    style.outline,
-    style.shadow,
-    style.alignment,
-    style.marginL,
-    style.marginR,
-    style.marginV,
-    style.encoding,
-  ].join('|')
-}
-
-function collectLeadingOverrideContent(segment: string): string {
-  const text = segment.trimStart()
-  let cursor = 0
-  let buffer = ''
-
-  while (text[cursor] === '{') {
-    const end = text.indexOf('}', cursor + 1)
-    if (end === -1) break
-    const block = text.slice(cursor + 1, end)
-    if (!block.startsWith('\\')) break
-    buffer += block
-    cursor = end + 1
-  }
-
-  return buffer
-}
-
 function replaceChinesePunctuation(text: string, replacement: string): string {
   return text.replace(CHINESE_PUNCTUATION_REGEX, replacement)
 }
@@ -680,4 +563,34 @@ function inferSplitStyleBaseName(text: string, fallbackBaseName: string, segment
   if (latinCount > 0) return 'ENG'
   if (cjkCount > 0) return 'CHS'
   return `${fallbackBaseName}_split_${segmentIndex + 1}`
+}
+
+function findStyleNameCaseInsensitive(styleByName: Map<string, AssStyle>, name: string): string | null {
+  if (styleByName.has(name)) return name
+  const lower = name.toLowerCase()
+  for (const styleName of styleByName.keys()) {
+    if (styleName.toLowerCase() === lower) return styleName
+  }
+  return null
+}
+
+function resolveOrCreateSplitStyleName(
+  preferredBaseName: string,
+  baseStyle: AssStyle,
+  styleByName: Map<string, AssStyle>,
+  existingStyleNames: Set<string>,
+  nextStyles: AssStyle[]
+): string {
+  const existingName = findStyleNameCaseInsensitive(styleByName, preferredBaseName)
+  if (existingName) return existingName
+
+  const nextName = createUniqueStyleName(preferredBaseName, existingStyleNames)
+  existingStyleNames.add(nextName)
+  const nextStyle = createAssStyle({
+    ...baseStyle,
+    name: nextName,
+  })
+  nextStyles.push(nextStyle)
+  styleByName.set(nextName, nextStyle)
+  return nextName
 }

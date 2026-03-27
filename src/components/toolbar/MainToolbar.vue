@@ -7,9 +7,9 @@
       class="px-3 py-1.5 bg-teal-600 text-white text-sm rounded hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed"
       :disabled="store.items.length === 0 || splitLoading || cleanLoading"
       @click="handleSplitBilingual"
-      title="拆分带换行的双语字幕为两行，保持时间轴一致并提取内联样式"
+      title="拆分带换行的双行字幕为两行，保持时间轴一致并提取内联样式"
     >
-      {{ splitLoading ? '处理中...' : '拆分双语字幕' }}
+      {{ splitLoading ? '处理中...' : '拆分双行字幕' }}
     </button>
     <button
       class="px-3 py-1.5 bg-orange-600 text-white text-sm rounded hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -150,9 +150,9 @@
       class="px-3 py-1.5 bg-teal-600 text-white text-sm rounded hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed"
       :disabled="store.items.length === 0"
       @click="handleSplitBilingual"
-      title="拆分带换行的双语字幕为两行，保持时间轴一致并提取内联样式"
+      title="拆分带换行的双行字幕为两行，保持时间轴一致并提取内联样式"
     >
-      拆分双语
+      拆分双行
     </button>
 
     <div class="w-px h-6 bg-gray-300 mx-2"></div>
@@ -165,7 +165,7 @@
   <div v-if="splitLoading" class="split-loading-overlay">
     <div class="split-loading-panel">
       <span class="spinner" />
-      <span>正在拆分双语字幕，请稍候...</span>
+      <span>正在拆分双行字幕，请稍候...</span>
     </div>
   </div>
   <div v-if="cleanLoading" class="split-loading-overlay">
@@ -286,7 +286,7 @@ async function handleSplitBilingual() {
   splitLoading.value = false
   splitResultMessage.value = changed > 0
     ? `处理成功：已拆分 ${changed} 条字幕`
-    : '未发现可拆分的双语字幕'
+    : '未发现可拆分的双行字幕'
   clearSplitMessageLater()
 }
 

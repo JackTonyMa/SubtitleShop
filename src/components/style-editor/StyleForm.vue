@@ -7,9 +7,11 @@ const props = withDefaults(defineProps<{
   modelValue: AssStyle
   playResX?: number
   playResY?: number
+  readonly?: boolean
 }>(), {
   playResX: 1920,
   playResY: 1080,
+  readonly: false,
 })
 
 const emit = defineEmits<{
@@ -123,6 +125,7 @@ function updateStyle(updates: Partial<AssStyle>) {
       <input
         type="text"
         v-model="styleName"
+        :disabled="readonly"
         class="form-input"
         placeholder="输入样式名称"
       />
@@ -134,6 +137,7 @@ function updateStyle(updates: Partial<AssStyle>) {
       <input
         type="text"
         v-model="fontName"
+        :disabled="readonly"
         class="form-input"
         placeholder="输入字体名称"
       />
@@ -149,6 +153,7 @@ function updateStyle(updates: Partial<AssStyle>) {
         type="range"
         :value="style.fontSize"
         @input="updateStyle({ fontSize: Number(($event.target as HTMLInputElement).value) })"
+        :disabled="readonly"
         min="8"
         max="200"
         class="form-slider"
@@ -162,6 +167,7 @@ function updateStyle(updates: Partial<AssStyle>) {
         <input
           type="color"
           v-model="primaryColorCss"
+          :disabled="readonly"
           class="form-color-picker"
         />
         <span class="text-sm text-gray-600 font-mono">{{ primaryColorCss }}</span>
@@ -174,6 +180,7 @@ function updateStyle(updates: Partial<AssStyle>) {
         <input
           type="color"
           v-model="outlineColorCss"
+          :disabled="readonly"
           class="form-color-picker"
         />
         <span class="text-sm text-gray-600 font-mono">{{ outlineColorCss }}</span>
@@ -189,6 +196,7 @@ function updateStyle(updates: Partial<AssStyle>) {
             type="checkbox"
             :checked="style.bold"
             @change="updateStyle({ bold: ($event.target as HTMLInputElement).checked })"
+            :disabled="readonly"
             class="form-checkbox"
           />
           <span class="font-bold">粗体</span>
@@ -198,6 +206,7 @@ function updateStyle(updates: Partial<AssStyle>) {
             type="checkbox"
             :checked="style.italic"
             @change="updateStyle({ italic: ($event.target as HTMLInputElement).checked })"
+            :disabled="readonly"
             class="form-checkbox"
           />
           <span class="italic">斜体</span>
@@ -207,6 +216,7 @@ function updateStyle(updates: Partial<AssStyle>) {
             type="checkbox"
             :checked="style.underline"
             @change="updateStyle({ underline: ($event.target as HTMLInputElement).checked })"
+            :disabled="readonly"
             class="form-checkbox"
           />
           <span class="underline">下划线</span>
@@ -224,6 +234,7 @@ function updateStyle(updates: Partial<AssStyle>) {
         type="range"
         :value="style.outline"
         @input="updateStyle({ outline: Number(($event.target as HTMLInputElement).value) })"
+        :disabled="readonly"
         min="0"
         max="4"
         step="0.5"
@@ -241,6 +252,7 @@ function updateStyle(updates: Partial<AssStyle>) {
         type="range"
         :value="style.shadow"
         @input="updateStyle({ shadow: Number(($event.target as HTMLInputElement).value) })"
+        :disabled="readonly"
         min="0"
         max="4"
         step="0.5"
@@ -258,6 +270,7 @@ function updateStyle(updates: Partial<AssStyle>) {
         type="range"
         :value="horizontalPosition"
         @input="horizontalPosition = Number(($event.target as HTMLInputElement).value)"
+        :disabled="readonly"
         min="0"
         max="100"
         step="1"
@@ -279,6 +292,7 @@ function updateStyle(updates: Partial<AssStyle>) {
         type="range"
         :value="verticalPosition"
         @input="verticalPosition = Number(($event.target as HTMLInputElement).value)"
+        :disabled="readonly"
         min="0"
         max="100"
         step="1"
