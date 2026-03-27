@@ -11,7 +11,7 @@ const props = defineProps<{
 }>()
 
 const defaultPreviewText = '预览文本\nPreview Text'
-const previewHeight = 216
+const previewHeight = 176
 
 const displayText = computed(() => props.previewText || defaultPreviewText)
 const safePlayResX = computed(() => (props.playResX && props.playResX > 0 ? props.playResX : 1920))
@@ -167,9 +167,9 @@ const textAlignment = computed(() => {
 
 .preview-canvas {
   width: 100%;
-  max-width: 384px;
+  max-width: 320px;
   aspect-ratio: 16 / 9;
-  margin: 0.75rem auto;
+  margin: 0.45rem auto;
   position: relative;
   border-radius: 0.375rem;
   background: radial-gradient(circle at 50% 35%, #1f2a44 0%, #151b2d 55%, #0e1321 100%);

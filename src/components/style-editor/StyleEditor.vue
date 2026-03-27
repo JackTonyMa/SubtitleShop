@@ -29,6 +29,9 @@ const renameDraft = ref('')
 const renameError = ref('')
 const trackChangeConfirmVisible = ref(false)
 const pendingTrackChange = ref<{ track: number; nextStyle: string } | null>(null)
+const unsavedDialogVisible = ref(false)
+let pendingAfterUnsavedDecision: (() => void) | null = null
+let bypassUnsavedGuard = false
 
 // Watch for store styles changes
 const projectStyles = computed(() => {
@@ -115,6 +118,15 @@ const visibleTrackSummaries = computed(() => {
 const hiddenTrackCount = computed(() => {
   const hidden = trackSummaries.value.length - visibleTrackSummaries.value.length
   return hidden > 0 ? hidden : 0
+})
+const currentPreviewStyle = computed(() => previewPresetStyle.value ?? editingStyle.value)
+const currentFormTitle = computed(() => (previewPresetStyle.value ? '预设预览（只读）' : '样式设置'))
+const hasUnsavedChanges = computed(() => {
+  if (previewPresetStyle.value) return false
+  if (!selectedStyleName.value || !editingStyle.value) return false
+  const current = store.styles.find(style => style.name === selectedStyleName.value)
+  if (!current) return false
+  return buildStyleSignature(current) !== buildStyleSignature(editingStyle.value)
 })
 
 function inferTrackLanguageMeta(
@@ -226,59 +238,68 @@ watch(
 )
 
 function handleSelect(styleName: string) {
-  previewPresetStyle.value = null
-  previewPresetName.value = ''
-  selectedStyleName.value = styleName
+  if (styleName === selectedStyleName.value && !previewPresetStyle.value) return
+  runWithUnsavedGuard(() => {
+    previewPresetStyle.value = null
+    previewPresetName.value = ''
+    selectedStyleName.value = styleName
+  })
 }
 
 function handleNew() {
-  previewPresetStyle.value = null
-  previewPresetName.value = ''
-  // Find a unique name
-  let index = 1
-  let name = 'New Style'
-  while (store.styles.some(s => s.name === name)) {
-    name = `New Style ${index}`
-    index++
-  }
+  runWithUnsavedGuard(() => {
+    previewPresetStyle.value = null
+    previewPresetName.value = ''
+    // Find a unique name
+    let index = 1
+    let name = 'New Style'
+    while (store.styles.some(s => s.name === name)) {
+      name = `New Style ${index}`
+      index++
+    }
 
-  const newStyle = createAssStyle({ name })
-  store.addStyle(newStyle)
-  selectedStyleName.value = name
-  editingStyle.value = { ...newStyle }
+    const newStyle = createAssStyle({ name })
+    store.addStyle(newStyle)
+    selectedStyleName.value = name
+    editingStyle.value = { ...newStyle }
+  })
 }
 
 function handleCopy(styleName: string) {
-  previewPresetStyle.value = null
-  previewPresetName.value = ''
-  const style = store.styles.find(s => s.name === styleName)
-  if (!style) return
+  runWithUnsavedGuard(() => {
+    previewPresetStyle.value = null
+    previewPresetName.value = ''
+    const style = store.styles.find(s => s.name === styleName)
+    if (!style) return
 
-  // Find a unique name
-  let index = 1
-  let name = `${style.name} Copy`
-  while (store.styles.some(s => s.name === name)) {
-    name = `${style.name} Copy ${index}`
-    index++
-  }
+    // Find a unique name
+    let index = 1
+    let name = `${style.name} Copy`
+    while (store.styles.some(s => s.name === name)) {
+      name = `${style.name} Copy ${index}`
+      index++
+    }
 
-  const copiedStyle = createAssStyle({
-    ...style,
-    name,
+    const copiedStyle = createAssStyle({
+      ...style,
+      name,
+    })
+    store.addStyle(copiedStyle)
+    selectedStyleName.value = name
+    editingStyle.value = { ...copiedStyle }
   })
-  store.addStyle(copiedStyle)
-  selectedStyleName.value = name
-  editingStyle.value = { ...copiedStyle }
 }
 
 function handleDelete(styleName: string) {
-  previewPresetStyle.value = null
-  previewPresetName.value = ''
-  store.removeStyle(styleName)
-  if (selectedStyleName.value === styleName) {
-    selectedStyleName.value = store.styles[0]?.name || null
-    editingStyle.value = store.styles[0] ? { ...store.styles[0] } : null
-  }
+  runWithUnsavedGuard(() => {
+    previewPresetStyle.value = null
+    previewPresetName.value = ''
+    store.removeStyle(styleName)
+    if (selectedStyleName.value === styleName) {
+      selectedStyleName.value = store.styles[0]?.name || null
+      editingStyle.value = store.styles[0] ? { ...store.styles[0] } : null
+    }
+  })
 }
 
 function handleRename(styleName: string) {
@@ -317,15 +338,7 @@ function submitRenameDialog() {
 function handleStyleUpdate(updatedStyle: AssStyle) {
   previewPresetStyle.value = null
   previewPresetName.value = ''
-  const previousName = selectedStyleName.value
   editingStyle.value = updatedStyle
-  if (!previousName) return
-
-  store.updateStyle(previousName, updatedStyle)
-
-  if (updatedStyle.name !== previousName) {
-    selectedStyleName.value = updatedStyle.name
-  }
 }
 
 function handleTrackSelect(track: number) {
@@ -409,16 +422,21 @@ function syncSelectedStyleByTrack(track: number) {
 
   if (!candidate || !store.styles.some(style => style.name === candidate)) return
   pinnedStyleName.value = candidate
-  previewPresetStyle.value = null
-  previewPresetName.value = ''
-  selectedStyleName.value = candidate
+  if (selectedStyleName.value === candidate && !previewPresetStyle.value) return
+  runWithUnsavedGuard(() => {
+    previewPresetStyle.value = null
+    previewPresetName.value = ''
+    selectedStyleName.value = candidate
+  })
 }
 
 function handlePreviewPreset(presetId: string) {
-  const style = createStyleFromPreset(presetId)
-  if (!style) return
-  previewPresetStyle.value = style
-  previewPresetName.value = style.name
+  runWithUnsavedGuard(() => {
+    const style = createStyleFromPreset(presetId)
+    if (!style) return
+    previewPresetStyle.value = style
+    previewPresetName.value = style.name
+  })
 }
 
 function ensurePresetStyle(presetId: string): string | null {
@@ -470,6 +488,65 @@ function buildStyleSignatureWithoutName(style: Omit<AssStyle, 'name'> | AssStyle
     style.encoding,
   ].join('|')
 }
+
+function buildStyleSignature(style: AssStyle): string {
+  return [
+    style.name,
+    buildStyleSignatureWithoutName(style),
+  ].join('|')
+}
+
+function runWithUnsavedGuard(action: () => void) {
+  if (bypassUnsavedGuard || !hasUnsavedChanges.value || previewPresetStyle.value) {
+    action()
+    return
+  }
+  pendingAfterUnsavedDecision = action
+  unsavedDialogVisible.value = true
+}
+
+function closeUnsavedDialog() {
+  unsavedDialogVisible.value = false
+  pendingAfterUnsavedDecision = null
+}
+
+function executePendingAction() {
+  const next = pendingAfterUnsavedDecision
+  pendingAfterUnsavedDecision = null
+  unsavedDialogVisible.value = false
+  if (!next) return
+  bypassUnsavedGuard = true
+  try {
+    next()
+  } finally {
+    bypassUnsavedGuard = false
+  }
+}
+
+function saveCurrentStyle() {
+  if (previewPresetStyle.value) return
+  if (!selectedStyleName.value || !editingStyle.value) return
+  const previousName = selectedStyleName.value
+  store.updateStyle(previousName, editingStyle.value)
+  if (editingStyle.value.name !== previousName) {
+    selectedStyleName.value = editingStyle.value.name
+  }
+}
+
+function handleSaveAndContinue() {
+  saveCurrentStyle()
+  executePendingAction()
+}
+
+function handleDiscardAndContinue() {
+  if (selectedStyleName.value) {
+    const source = store.styles.find(style => style.name === selectedStyleName.value)
+    if (source) {
+      editingStyle.value = { ...source }
+    }
+  }
+  executePendingAction()
+}
 </script>
 
 <template>
@@ -511,53 +588,27 @@ function buildStyleSignatureWithoutName(style: Omit<AssStyle, 'name'> | AssStyle
         />
       </div>
 
-      <!-- Right: Form + Preview -->
+      <!-- Right: Form -->
       <div ref="editorContentRef" class="editor-content">
-        <template v-if="previewPresetStyle">
-          <div class="content-split">
-            <div class="form-section">
-              <h3 class="section-title">预设预览（只读）</h3>
-              <div class="rounded border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
-                {{ previewPresetName }}
-              </div>
-              <StyleForm
-                :model-value="previewPresetStyle"
-                :play-res-x="playResX"
-                :play-res-y="playResY"
-                :readonly="true"
-              />
+        <template v-if="currentPreviewStyle">
+          <div class="form-section">
+            <div class="section-head">
+              <h3 class="section-title">{{ currentFormTitle }}</h3>
+              <button
+                v-if="!previewPresetStyle && hasUnsavedChanges"
+                class="save-btn"
+                @click="saveCurrentStyle"
+              >
+                保存
+              </button>
             </div>
-            <div class="preview-section">
-              <h3 class="section-title">实时预览</h3>
-              <StylePreview
-                :style="previewPresetStyle"
-                :play-res-x="playResX"
-                :play-res-y="playResY"
-                preview-text="字幕预览文本\nSubtitle Preview"
-              />
-            </div>
-          </div>
-        </template>
-        <template v-else-if="editingStyle">
-          <div class="content-split">
-            <div class="form-section">
-              <h3 class="section-title">样式设置</h3>
-              <StyleForm
-                :model-value="editingStyle"
-                :play-res-x="playResX"
-                :play-res-y="playResY"
-                @update:model-value="handleStyleUpdate"
-              />
-            </div>
-            <div class="preview-section">
-              <h3 class="section-title">实时预览</h3>
-              <StylePreview
-                :style="editingStyle"
-                :play-res-x="playResX"
-                :play-res-y="playResY"
-                preview-text="字幕预览文本\nSubtitle Preview"
-              />
-            </div>
+            <StyleForm
+              :model-value="currentPreviewStyle"
+              :play-res-x="playResX"
+              :play-res-y="playResY"
+              :readonly="!!previewPresetStyle"
+              @update:model-value="handleStyleUpdate"
+            />
           </div>
         </template>
         <template v-else>
@@ -569,6 +620,32 @@ function buildStyleSignatureWithoutName(style: Omit<AssStyle, 'name'> | AssStyle
             <p class="empty-hint">点击左侧"新建"按钮创建样式</p>
           </div>
         </template>
+      </div>
+
+      <!-- Far Right: Preview -->
+      <div class="preview-sidebar">
+        <template v-if="currentPreviewStyle">
+          <div class="preview-pane">
+            <h3 class="section-title">实时预览</h3>
+            <StylePreview
+              :style="currentPreviewStyle"
+              :play-res-x="playResX"
+              :play-res-y="playResY"
+              preview-text="字幕预览文本\nSubtitle Preview"
+            />
+          </div>
+        </template>
+      </div>
+    </div>
+  </div>
+  <div v-if="unsavedDialogVisible" class="rename-overlay" @click.self="closeUnsavedDialog">
+    <div class="rename-modal">
+      <h4 class="rename-title">有未保存的样式修改</h4>
+      <p class="rename-desc">切换前是否先保存当前样式？</p>
+      <div class="rename-actions">
+        <button class="rename-btn ghost" @click="closeUnsavedDialog">取消</button>
+        <button class="rename-btn ghost" @click="handleDiscardAndContinue">不保存</button>
+        <button class="rename-btn primary" @click="handleSaveAndContinue">保存并继续</button>
       </div>
     </div>
   </div>
@@ -609,11 +686,11 @@ function buildStyleSignatureWithoutName(style: Omit<AssStyle, 'name'> | AssStyle
 .style-editor {
   display: flex;
   flex-direction: column;
-  height: min(78vh, 900px);
-  min-height: 560px;
+  height: min(84vh, 980px);
+  min-height: 620px;
   background-color: white;
   border: 1px solid #e5e7eb;
-  border-radius: 0.5rem;
+  border-radius: 0.75rem;
   overflow: hidden;
 }
 
@@ -653,12 +730,12 @@ function buildStyleSignatureWithoutName(style: Omit<AssStyle, 'name'> | AssStyle
 }
 
 .tracks-sidebar {
-  width: 220px;
+  width: 200px;
   overflow-y: auto;
 }
 
 .styles-sidebar {
-  width: 280px;
+  width: 250px;
   display: flex;
   overflow: hidden;
   min-height: 0;
@@ -666,28 +743,48 @@ function buildStyleSignatureWithoutName(style: Omit<AssStyle, 'name'> | AssStyle
 
 .editor-content {
   flex: 1;
-  overflow: auto;
-  padding: 1.5rem;
-}
-
-.content-split {
-  display: grid;
-  grid-template-columns: minmax(560px, 1fr) minmax(360px, 440px);
-  gap: 2rem;
-  min-width: 940px;
-  max-width: 1240px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-width: 0;
+  padding: 0.85rem 0.95rem 1rem;
+  border-right: 1px solid #e5e7eb;
 }
 
 .form-section {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.55rem;
 }
 
-.preview-section {
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.save-btn {
+  border: 1px solid #2563eb;
+  border-radius: 0.5rem;
+  background: #2563eb;
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.3rem 0.62rem;
+}
+
+.preview-sidebar {
+  width: 340px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  min-height: 0;
+  padding: 0.85rem 0.95rem 1rem;
+}
+
+.preview-pane {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.55rem;
 }
 
 .section-title {
@@ -792,22 +889,6 @@ function buildStyleSignatureWithoutName(style: Omit<AssStyle, 'name'> | AssStyle
   color: #fff;
 }
 
-@media (max-width: 1600px) {
-  .editor-body {
-    overflow-x: auto;
-  }
-
-  .content-split {
-    grid-template-columns: 1fr;
-    min-width: 0;
-    max-width: none;
-  }
-
-  .preview-section {
-    max-width: 520px;
-  }
-}
-
 @media (max-width: 1200px) {
   .editor-body {
     flex-direction: column;
@@ -815,17 +896,22 @@ function buildStyleSignatureWithoutName(style: Omit<AssStyle, 'name'> | AssStyle
 
   .editor-sidebar,
   .tracks-sidebar,
-  .styles-sidebar {
+  .styles-sidebar,
+  .preview-sidebar {
     width: 100%;
     border-right: none;
     border-bottom: 1px solid #e5e7eb;
     max-height: 260px;
   }
+
+  .editor-content {
+    border-right: none;
+  }
 }
 
 @media (max-width: 900px) {
-  .content-split {
-    grid-template-columns: 1fr;
+  .editor-content {
+    padding: 0.85rem;
   }
 }
 </style>

@@ -118,190 +118,184 @@ function updateStyle(updates: Partial<AssStyle>) {
 </script>
 
 <template>
-  <div class="style-form space-y-4">
-    <!-- Style Name -->
-    <div class="form-group">
-      <label class="form-label">样式名称</label>
-      <input
-        type="text"
-        v-model="styleName"
-        :disabled="readonly"
-        class="form-input"
-        placeholder="输入样式名称"
-      />
-    </div>
-
-    <!-- Font -->
-    <div class="form-group">
-      <label class="form-label">字体</label>
-      <input
-        type="text"
-        v-model="fontName"
-        :disabled="readonly"
-        class="form-input"
-        placeholder="输入字体名称"
-      />
-    </div>
-
-    <!-- Font Size -->
-    <div class="form-group">
-      <label class="form-label flex justify-between">
-        <span>字号</span>
-        <span class="text-gray-500">{{ style.fontSize }}px</span>
-      </label>
-      <input
-        type="range"
-        :value="style.fontSize"
-        @input="updateStyle({ fontSize: Number(($event.target as HTMLInputElement).value) })"
-        :disabled="readonly"
-        min="8"
-        max="200"
-        class="form-slider"
-      />
-    </div>
-
-    <!-- Colors -->
-    <div class="form-group">
-      <label class="form-label">主颜色</label>
-      <div class="flex items-center gap-2">
+  <div class="style-form">
+    <div class="form-grid">
+      <div class="form-group form-group-span-2">
+        <label class="form-label">样式名称</label>
         <input
-          type="color"
-          v-model="primaryColorCss"
+          type="text"
+          v-model="styleName"
           :disabled="readonly"
-          class="form-color-picker"
+          class="form-input"
+          placeholder="输入样式名称"
         />
-        <span class="text-sm text-gray-600 font-mono">{{ primaryColorCss }}</span>
       </div>
-    </div>
 
-    <div class="form-group">
-      <label class="form-label">描边颜色</label>
-      <div class="flex items-center gap-2">
+      <div class="form-group">
+        <label class="form-label">字体</label>
         <input
-          type="color"
-          v-model="outlineColorCss"
+          type="text"
+          v-model="fontName"
           :disabled="readonly"
-          class="form-color-picker"
+          class="form-input"
+          placeholder="输入字体名称"
         />
-        <span class="text-sm text-gray-600 font-mono">{{ outlineColorCss }}</span>
       </div>
-    </div>
 
-    <!-- Text Style Checkboxes -->
-    <div class="form-group">
-      <label class="form-label">文本样式</label>
-      <div class="flex gap-4">
-        <label class="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            :checked="style.bold"
-            @change="updateStyle({ bold: ($event.target as HTMLInputElement).checked })"
-            :disabled="readonly"
-            class="form-checkbox"
-          />
-          <span class="font-bold">粗体</span>
+      <div class="form-group">
+        <label class="form-label with-value">
+          <span>字号</span>
+          <span class="form-value">{{ style.fontSize }}px</span>
         </label>
-        <label class="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            :checked="style.italic"
-            @change="updateStyle({ italic: ($event.target as HTMLInputElement).checked })"
-            :disabled="readonly"
-            class="form-checkbox"
-          />
-          <span class="italic">斜体</span>
-        </label>
-        <label class="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            :checked="style.underline"
-            @change="updateStyle({ underline: ($event.target as HTMLInputElement).checked })"
-            :disabled="readonly"
-            class="form-checkbox"
-          />
-          <span class="underline">下划线</span>
-        </label>
+        <input
+          type="range"
+          :value="style.fontSize"
+          @input="updateStyle({ fontSize: Number(($event.target as HTMLInputElement).value) })"
+          :disabled="readonly"
+          min="8"
+          max="200"
+          class="form-slider"
+        />
       </div>
-    </div>
 
-    <!-- Outline Width -->
-    <div class="form-group">
-      <label class="form-label flex justify-between">
-        <span>描边宽度</span>
-        <span class="text-gray-500">{{ style.outline }}</span>
-      </label>
-      <input
-        type="range"
-        :value="style.outline"
-        @input="updateStyle({ outline: Number(($event.target as HTMLInputElement).value) })"
-        :disabled="readonly"
-        min="0"
-        max="4"
-        step="0.5"
-        class="form-slider"
-      />
-    </div>
-
-    <!-- Shadow Depth -->
-    <div class="form-group">
-      <label class="form-label flex justify-between">
-        <span>阴影深度</span>
-        <span class="text-gray-500">{{ style.shadow }}</span>
-      </label>
-      <input
-        type="range"
-        :value="style.shadow"
-        @input="updateStyle({ shadow: Number(($event.target as HTMLInputElement).value) })"
-        :disabled="readonly"
-        min="0"
-        max="4"
-        step="0.5"
-        class="form-slider"
-      />
-    </div>
-
-    <!-- Position Sliders -->
-    <div class="form-group">
-      <label class="form-label flex justify-between">
-        <span>横向位置</span>
-        <span class="text-gray-500">{{ horizontalPosition }}%</span>
-      </label>
-      <input
-        type="range"
-        :value="horizontalPosition"
-        @input="horizontalPosition = Number(($event.target as HTMLInputElement).value)"
-        :disabled="readonly"
-        min="0"
-        max="100"
-        step="1"
-        class="form-slider"
-      />
-      <div class="position-hints">
-        <span>左</span>
-        <span>中</span>
-        <span>右</span>
+      <div class="form-group">
+        <label class="form-label">主颜色</label>
+        <div class="color-row">
+          <input
+            type="color"
+            v-model="primaryColorCss"
+            :disabled="readonly"
+            class="form-color-picker"
+          />
+          <span class="color-code">{{ primaryColorCss }}</span>
+        </div>
       </div>
-    </div>
 
-    <div class="form-group">
-      <label class="form-label flex justify-between">
-        <span>纵向位置</span>
-        <span class="text-gray-500">{{ verticalPosition }}%</span>
-      </label>
-      <input
-        type="range"
-        :value="verticalPosition"
-        @input="verticalPosition = Number(($event.target as HTMLInputElement).value)"
-        :disabled="readonly"
-        min="0"
-        max="100"
-        step="1"
-        class="form-slider"
-      />
-      <div class="position-hints">
-        <span>上</span>
-        <span>中</span>
-        <span>下</span>
+      <div class="form-group">
+        <label class="form-label">描边颜色</label>
+        <div class="color-row">
+          <input
+            type="color"
+            v-model="outlineColorCss"
+            :disabled="readonly"
+            class="form-color-picker"
+          />
+          <span class="color-code">{{ outlineColorCss }}</span>
+        </div>
+      </div>
+
+      <div class="form-group form-group-span-2">
+        <label class="form-label">文本样式</label>
+        <div class="toggle-row">
+          <label class="toggle-item">
+            <input
+              type="checkbox"
+              :checked="style.bold"
+              @change="updateStyle({ bold: ($event.target as HTMLInputElement).checked })"
+              :disabled="readonly"
+              class="form-checkbox"
+            />
+            <span class="toggle-label bold">粗体</span>
+          </label>
+          <label class="toggle-item">
+            <input
+              type="checkbox"
+              :checked="style.italic"
+              @change="updateStyle({ italic: ($event.target as HTMLInputElement).checked })"
+              :disabled="readonly"
+              class="form-checkbox"
+            />
+            <span class="toggle-label italic">斜体</span>
+          </label>
+          <label class="toggle-item">
+            <input
+              type="checkbox"
+              :checked="style.underline"
+              @change="updateStyle({ underline: ($event.target as HTMLInputElement).checked })"
+              :disabled="readonly"
+              class="form-checkbox"
+            />
+            <span class="toggle-label underline">下划线</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label with-value">
+          <span>描边宽度</span>
+          <span class="form-value">{{ style.outline }}</span>
+        </label>
+        <input
+          type="range"
+          :value="style.outline"
+          @input="updateStyle({ outline: Number(($event.target as HTMLInputElement).value) })"
+          :disabled="readonly"
+          min="0"
+          max="4"
+          step="0.5"
+          class="form-slider"
+        />
+      </div>
+
+      <div class="form-group">
+        <label class="form-label with-value">
+          <span>阴影深度</span>
+          <span class="form-value">{{ style.shadow }}</span>
+        </label>
+        <input
+          type="range"
+          :value="style.shadow"
+          @input="updateStyle({ shadow: Number(($event.target as HTMLInputElement).value) })"
+          :disabled="readonly"
+          min="0"
+          max="4"
+          step="0.5"
+          class="form-slider"
+        />
+      </div>
+
+      <div class="form-group">
+        <label class="form-label with-value">
+          <span>横向位置</span>
+          <span class="form-value">{{ horizontalPosition }}%</span>
+        </label>
+        <input
+          type="range"
+          :value="horizontalPosition"
+          @input="horizontalPosition = Number(($event.target as HTMLInputElement).value)"
+          :disabled="readonly"
+          min="0"
+          max="100"
+          step="1"
+          class="form-slider"
+        />
+        <div class="position-hints">
+          <span>左</span>
+          <span>中</span>
+          <span>右</span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label with-value">
+          <span>纵向位置</span>
+          <span class="form-value">{{ verticalPosition }}%</span>
+        </label>
+        <input
+          type="range"
+          :value="verticalPosition"
+          @input="verticalPosition = Number(($event.target as HTMLInputElement).value)"
+          :disabled="readonly"
+          min="0"
+          max="100"
+          step="1"
+          class="form-slider"
+        />
+        <div class="position-hints">
+          <span>上</span>
+          <span>中</span>
+          <span>下</span>
+        </div>
       </div>
     </div>
   </div>
@@ -309,26 +303,55 @@ function updateStyle(updates: Partial<AssStyle>) {
 
 <style scoped>
 .style-form {
-  padding: 1rem;
+  padding: 0.8rem 1rem;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem 0.9rem;
+}
+
+.form-group-span-2 {
+  grid-column: 1 / -1;
 }
 
 .form-group {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.4rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.6rem;
+  background-color: #f8fafc;
+  min-width: 0;
 }
 
 .form-label {
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   font-weight: 500;
   color: #374151;
 }
 
+.form-label.with-value {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.form-value {
+  font-size: 0.75rem;
+  color: #6b7280;
+  font-variant-numeric: tabular-nums;
+}
+
 .form-input {
-  padding: 0.5rem 0.75rem;
+  width: 100%;
+  min-width: 0;
+  padding: 0.45rem 0.65rem;
   border: 1px solid #d1d5db;
-  border-radius: 0.375rem;
-  font-size: 0.875rem;
+  border-radius: 0.45rem;
+  font-size: 0.8125rem;
   background-color: white;
   transition: border-color 0.15s ease;
 }
@@ -341,7 +364,7 @@ function updateStyle(updates: Partial<AssStyle>) {
 
 .form-slider {
   width: 100%;
-  height: 0.5rem;
+  height: 0.38rem;
   background-color: #e5e7eb;
   border-radius: 0.25rem;
   appearance: none;
@@ -350,8 +373,8 @@ function updateStyle(updates: Partial<AssStyle>) {
 
 .form-slider::-webkit-slider-thumb {
   appearance: none;
-  width: 1rem;
-  height: 1rem;
+  width: 0.85rem;
+  height: 0.85rem;
   background-color: #3b82f6;
   border-radius: 50%;
   cursor: pointer;
@@ -363,13 +386,25 @@ function updateStyle(updates: Partial<AssStyle>) {
 }
 
 .form-color-picker {
-  width: 3rem;
-  height: 2rem;
+  width: 2.3rem;
+  height: 1.65rem;
   padding: 0;
   border: 1px solid #d1d5db;
-  border-radius: 0.375rem;
+  border-radius: 0.45rem;
   cursor: pointer;
   background: none;
+}
+
+.color-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.color-code {
+  font-size: 0.75rem;
+  color: #6b7280;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
 .form-checkbox {
@@ -380,10 +415,52 @@ function updateStyle(updates: Partial<AssStyle>) {
   cursor: pointer;
 }
 
+.toggle-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 0.9rem;
+}
+
+.toggle-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.toggle-label.bold {
+  font-weight: 700;
+}
+
+.toggle-label.italic {
+  font-style: italic;
+}
+
+.toggle-label.underline {
+  text-decoration: underline;
+}
+
 .position-hints {
   display: flex;
   justify-content: space-between;
-  font-size: 0.75rem;
+  font-size: 0.6875rem;
   color: #6b7280;
+}
+
+@media (max-width: 860px) {
+  .form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .form-group-span-2 {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 620px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
