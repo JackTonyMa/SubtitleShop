@@ -4,7 +4,6 @@ import { useSubtitleStore } from '../../stores/subtitle'
 import { createAssStyle } from '../../core/models/AssStyle'
 import type { AssStyle } from '../../core/models/AssStyle'
 import { createStyleFromPreset, PRESET_STYLES } from '../preset-styles'
-import { detectBilingualStyleRoles } from '../../utils/bilingualDetection'
 import type { SubtitleItem } from '../../core/models/SubtitleItem'
 import StyleList from './StyleList.vue'
 import StyleForm from './StyleForm.vue'
@@ -19,10 +18,12 @@ const pinnedStyleName = ref<string | null>(null)
 const editingStyle = ref<AssStyle | null>(null)
 const previewPresetStyle = ref<AssStyle | null>(null)
 const previewPresetName = ref('')
+const activePresetId = ref<string | null>(null)
 const editorContentRef = ref<HTMLElement | null>(null)
 const selectedTrack = ref<number | null>(null)
 const trackStyleBindings = ref<Record<number, string>>({})
 const hideLowShareTracks = ref(true)
+const hideUnusedStyles = ref(true)
 const renameDialogVisible = ref(false)
 const renameSourceName = ref('')
 const renameDraft = ref('')
@@ -32,10 +33,17 @@ const pendingTrackChange = ref<{ track: number; nextStyle: string } | null>(null
 const unsavedDialogVisible = ref(false)
 let pendingAfterUnsavedDecision: (() => void) | null = null
 let bypassUnsavedGuard = false
+const PREVIEW_TEXT = '字幕预览文本\nSubtitle Preview'
 
 // Watch for store styles changes
 const projectStyles = computed(() => {
   const list = [...store.styles]
+  list.sort((a, b) => {
+    const diff = (styleReferenceCounts.value[b.name] || 0) - (styleReferenceCounts.value[a.name] || 0)
+    if (diff !== 0) return diff
+    return a.name.localeCompare(b.name, 'zh-CN')
+  })
+
   const pinned = pinnedStyleName.value
   if (!pinned) return list
 
@@ -56,7 +64,6 @@ const presetOptions = computed(() => PRESET_STYLES.map(preset => ({
   id: preset.id,
   name: preset.name,
 })))
-const resolvedStyleRoles = computed(() => detectBilingualStyleRoles(store.items, store.styles))
 const validStyleNameSet = computed(() => new Set(store.styles.map(style => style.name)))
 
 const itemTrackMap = computed(() => {
@@ -92,7 +99,7 @@ const trackSummaries = computed(() => {
       const dominantStyle = firstStyle && validStyleNameSet.value.has(firstStyle)
         ? firstStyle
         : UNIFIED_STYLE_PLACEHOLDER
-      const languageMeta = inferTrackLanguageMeta(items, dominantStyle)
+      const languageMeta = inferTrackLanguageMeta(items)
       return {
         track,
         itemCount: items.length,
@@ -119,6 +126,28 @@ const hiddenTrackCount = computed(() => {
   const hidden = trackSummaries.value.length - visibleTrackSummaries.value.length
   return hidden > 0 ? hidden : 0
 })
+const styleReferenceCounts = computed<Record<string, number>>(() => {
+  const counts: Record<string, number> = {}
+  for (const style of store.styles) {
+    counts[style.name] = 0
+  }
+  for (const item of store.items) {
+    const name = item.style?.trim()
+    if (!name) continue
+    if (name in counts) {
+      counts[name] += 1
+    }
+  }
+  return counts
+})
+const hiddenUnusedStyleCount = computed(() => {
+  if (!hideUnusedStyles.value) return 0
+  let hidden = 0
+  for (const style of store.styles) {
+    if ((styleReferenceCounts.value[style.name] || 0) <= 0) hidden++
+  }
+  return hidden
+})
 const currentPreviewStyle = computed(() => previewPresetStyle.value ?? editingStyle.value)
 const currentFormTitle = computed(() => (previewPresetStyle.value ? '预设预览（只读）' : '样式设置'))
 const hasUnsavedChanges = computed(() => {
@@ -130,19 +159,8 @@ const hasUnsavedChanges = computed(() => {
 })
 
 function inferTrackLanguageMeta(
-  items: SubtitleItem[],
-  dominantStyle: string
+  items: SubtitleItem[]
 ): { label: '中文' | '英文' | '中性'; confidence: number } {
-  if (dominantStyle !== UNIFIED_STYLE_PLACEHOLDER) {
-    const roleInfo = resolvedStyleRoles.value[dominantStyle]
-    if (roleInfo?.role === 'primary') {
-      return { label: '中文', confidence: Math.round(roleInfo.confidence * 100) }
-    }
-    if (roleInfo?.role === 'secondary') {
-      return { label: '英文', confidence: Math.round(roleInfo.confidence * 100) }
-    }
-  }
-
   let cjkCount = 0
   let latinCount = 0
   for (const item of items) {
@@ -242,6 +260,7 @@ function handleSelect(styleName: string) {
   runWithUnsavedGuard(() => {
     previewPresetStyle.value = null
     previewPresetName.value = ''
+    activePresetId.value = null
     selectedStyleName.value = styleName
   })
 }
@@ -250,6 +269,7 @@ function handleNew() {
   runWithUnsavedGuard(() => {
     previewPresetStyle.value = null
     previewPresetName.value = ''
+    activePresetId.value = null
     // Find a unique name
     let index = 1
     let name = 'New Style'
@@ -269,6 +289,7 @@ function handleCopy(styleName: string) {
   runWithUnsavedGuard(() => {
     previewPresetStyle.value = null
     previewPresetName.value = ''
+    activePresetId.value = null
     const style = store.styles.find(s => s.name === styleName)
     if (!style) return
 
@@ -294,6 +315,7 @@ function handleDelete(styleName: string) {
   runWithUnsavedGuard(() => {
     previewPresetStyle.value = null
     previewPresetName.value = ''
+    activePresetId.value = null
     store.removeStyle(styleName)
     if (selectedStyleName.value === styleName) {
       selectedStyleName.value = store.styles[0]?.name || null
@@ -305,6 +327,7 @@ function handleDelete(styleName: string) {
 function handleRename(styleName: string) {
   previewPresetStyle.value = null
   previewPresetName.value = ''
+  activePresetId.value = null
   renameSourceName.value = styleName
   renameDraft.value = styleName
   renameError.value = ''
@@ -338,6 +361,7 @@ function submitRenameDialog() {
 function handleStyleUpdate(updatedStyle: AssStyle) {
   previewPresetStyle.value = null
   previewPresetName.value = ''
+  activePresetId.value = null
   editingStyle.value = updatedStyle
 }
 
@@ -348,6 +372,10 @@ function handleTrackSelect(track: number) {
 
 function handleToggleHideLowShareTracks(value: boolean) {
   hideLowShareTracks.value = value
+}
+
+function handleToggleHideUnusedStyles(value: boolean) {
+  hideUnusedStyles.value = value
 }
 
 function handleTrackBindingUpdate(track: number, value: string) {
@@ -406,6 +434,7 @@ function submitTrackChangeConfirm() {
   pinnedStyleName.value = payload.nextStyle
   previewPresetStyle.value = null
   previewPresetName.value = ''
+  activePresetId.value = null
   selectedStyleName.value = payload.nextStyle
   handleApplyTrackStyle(payload.track)
   closeTrackChangeConfirm()
@@ -426,6 +455,7 @@ function syncSelectedStyleByTrack(track: number) {
   runWithUnsavedGuard(() => {
     previewPresetStyle.value = null
     previewPresetName.value = ''
+    activePresetId.value = null
     selectedStyleName.value = candidate
   })
 }
@@ -436,6 +466,7 @@ function handlePreviewPreset(presetId: string) {
     if (!style) return
     previewPresetStyle.value = style
     previewPresetName.value = style.name
+    activePresetId.value = presetId
   })
 }
 
@@ -551,11 +582,6 @@ function handleDiscardAndContinue() {
 
 <template>
   <div class="style-editor">
-    <div class="editor-header">
-      <h2 class="editor-title">样式编辑器</h2>
-      <span class="editor-subtitle">{{ projectStyles.length }} 个样式</span>
-    </div>
-
     <div class="editor-body">
       <!-- Left: Tracks -->
       <div class="editor-sidebar tracks-sidebar">
@@ -578,13 +604,17 @@ function handleDiscardAndContinue() {
         <StyleList
           :styles="projectStyles"
           :selected-style-name="selectedStyleName"
-          :style-roles="resolvedStyleRoles"
+          :active-preset-id="activePresetId"
+          :hide-unused-styles="hideUnusedStyles"
+          :hidden-unused-style-count="hiddenUnusedStyleCount"
+          :style-reference-counts="styleReferenceCounts"
           @select="handleSelect"
           @new="handleNew"
           @copy="handleCopy"
           @rename="handleRename"
           @delete="handleDelete"
           @preview-preset="handlePreviewPreset"
+          @update-hide-unused-styles="handleToggleHideUnusedStyles"
         />
       </div>
 
@@ -626,12 +656,14 @@ function handleDiscardAndContinue() {
       <div class="preview-sidebar">
         <template v-if="currentPreviewStyle">
           <div class="preview-pane">
-            <h3 class="section-title">实时预览</h3>
+            <div class="section-head">
+              <h3 class="section-title">实时预览</h3>
+            </div>
             <StylePreview
               :style="currentPreviewStyle"
               :play-res-x="playResX"
               :play-res-y="playResY"
-              preview-text="字幕预览文本\nSubtitle Preview"
+              :preview-text="PREVIEW_TEXT"
             />
           </div>
         </template>
@@ -686,32 +718,12 @@ function handleDiscardAndContinue() {
 .style-editor {
   display: flex;
   flex-direction: column;
-  height: min(84vh, 980px);
-  min-height: 620px;
+  height: min(78vh, 900px);
+  min-height: 560px;
   background-color: white;
   border: 1px solid #e5e7eb;
-  border-radius: 0.75rem;
+  border-radius: 0.65rem;
   overflow: hidden;
-}
-
-.editor-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 1rem 1.25rem;
-  background-color: #f9fafb;
-  border-bottom: 1px solid #e5e7eb;
-}
-
-.editor-title {
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: #111827;
-}
-
-.editor-subtitle {
-  font-size: 0.875rem;
-  color: #6b7280;
 }
 
 .editor-body {
@@ -730,12 +742,12 @@ function handleDiscardAndContinue() {
 }
 
 .tracks-sidebar {
-  width: 200px;
+  width: 190px;
   overflow-y: auto;
 }
 
 .styles-sidebar {
-  width: 250px;
+  width: 230px;
   display: flex;
   overflow: hidden;
   min-height: 0;
@@ -746,7 +758,7 @@ function handleDiscardAndContinue() {
   overflow-y: auto;
   overflow-x: hidden;
   min-width: 0;
-  padding: 0.85rem 0.95rem 1rem;
+  padding: 1rem 0.75rem 0.85rem;
   border-right: 1px solid #e5e7eb;
 }
 
@@ -761,6 +773,9 @@ function handleDiscardAndContinue() {
   align-items: center;
   justify-content: space-between;
   gap: 0.6rem;
+  min-height: 2rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #e5e7eb;
 }
 
 .save-btn {
@@ -774,11 +789,11 @@ function handleDiscardAndContinue() {
 }
 
 .preview-sidebar {
-  width: 340px;
+  width: 300px;
   flex-shrink: 0;
   overflow-y: auto;
   min-height: 0;
-  padding: 0.85rem 0.95rem 1rem;
+  padding: 1rem 0.75rem 0.85rem;
 }
 
 .preview-pane {
@@ -791,8 +806,6 @@ function handleDiscardAndContinue() {
   font-size: 0.875rem;
   font-weight: 600;
   color: #374151;
-  text-transform: uppercase;
-  letter-spacing: 0.025em;
 }
 
 .empty-state {
@@ -806,13 +819,13 @@ function handleDiscardAndContinue() {
 }
 
 .empty-text {
-  font-size: 1rem;
+  font-size: 0.9rem;
   font-weight: 500;
   color: #6b7280;
 }
 
 .empty-hint {
-  font-size: 0.875rem;
+  font-size: 0.8rem;
   color: #9ca3af;
 }
 

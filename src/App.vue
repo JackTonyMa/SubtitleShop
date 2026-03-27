@@ -1,11 +1,10 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import { useSubtitleStore } from './stores/subtitle'
 import { useFileExport } from './composables/useFileExport'
 import { useKeyboardShortcuts } from './composables/useKeyboardShortcuts'
 import { FileInput, SourceDiffModal, StyleSelectionModal } from './components/common'
 import { SubtitleTable } from './components/table'
-import { MainToolbar } from './components/toolbar'
 import { StyleEditor } from './components/style-editor'
 import {
   parseAss,
@@ -34,6 +33,11 @@ const styleSelectionVisible = ref(false)
 const pendingStyleCandidates = ref<AssStyleCandidate[]>([])
 const pendingNormalizeBaseContent = ref('')
 const currentView = ref<'table' | 'styles'>('styles')
+const splitLoading = ref(false)
+const cleanLoading = ref(false)
+const cleanDialogVisible = ref(false)
+const cleanReplacement = ref(' ')
+const topActionMessage = ref('')
 const currentSerializedContent = computed(() => {
   if (!store.hasFile) return ''
   const data = store.getExportData()
@@ -124,6 +128,45 @@ async function handleFileSelect(file: File) {
 
 function handleExportFile() {
   exportFile()
+}
+
+function clearTopActionMessageLater() {
+  window.setTimeout(() => {
+    topActionMessage.value = ''
+  }, 3000)
+}
+
+async function handleSplitBilingual() {
+  if (splitLoading.value || !store.hasFile || store.items.length === 0) return
+  topActionMessage.value = ''
+  splitLoading.value = true
+  await nextTick()
+  await new Promise(resolve => window.setTimeout(resolve, 0))
+
+  const onlySelected = store.selectedIds.size > 0
+  const changed = store.splitBilingualLines(onlySelected)
+  splitLoading.value = false
+  topActionMessage.value = changed > 0
+    ? `处理成功：已拆分 ${changed} 条字幕`
+    : '未发现可拆分的双行字幕'
+  clearTopActionMessageLater()
+}
+
+async function handleCleanChinesePunctuation() {
+  if (cleanLoading.value || !store.hasFile) return
+  topActionMessage.value = ''
+  cleanLoading.value = true
+  await nextTick()
+  await new Promise(resolve => window.setTimeout(resolve, 0))
+
+  const onlySelected = store.selectedIds.size > 0
+  const changed = store.cleanChinesePunctuation(cleanReplacement.value, onlySelected)
+  cleanLoading.value = false
+  cleanDialogVisible.value = false
+  topActionMessage.value = changed > 0
+    ? `处理成功：已清理 ${changed} 条字幕`
+    : '未发现可清理的中文符号'
+  clearTopActionMessageLater()
 }
 
 function handleCloseFile() {
@@ -225,14 +268,14 @@ function applyStructureNormalization(selectedStyleIds: string[]) {
         <!-- View Switcher -->
         <div class="flex border-b border-gray-200">
           <button
-            class="px-4 py-2 text-sm font-medium"
+            class="px-3 py-1.5 text-sm font-medium"
             :class="currentView === 'styles' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-600 hover:text-gray-800'"
             @click="currentView = 'styles'"
           >
             样式
           </button>
           <button
-            class="px-4 py-2 text-sm font-medium"
+            class="px-3 py-1.5 text-sm font-medium"
             :class="currentView === 'table' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-600 hover:text-gray-800'"
             @click="currentView = 'table'"
           >
@@ -240,23 +283,42 @@ function applyStructureNormalization(selectedStyleIds: string[]) {
           </button>
         </div>
 
-        <div class="p-6">
-          <div class="flex justify-between items-center mb-4">
-            <h2 class="text-lg font-semibold">{{ store.currentFile?.filename }}</h2>
-            <div class="flex gap-2">
+        <div class="p-3">
+          <div class="flex justify-between items-center gap-2 mb-2">
+            <h2 class="text-sm font-semibold truncate pr-2">{{ store.currentFile?.filename }}</h2>
+            <div class="flex gap-1.5 shrink-0">
               <button
-                class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
+                class="px-2.5 py-1 text-xs bg-teal-600 text-white rounded hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                :disabled="store.items.length === 0 || splitLoading || cleanLoading"
+                @click="handleSplitBilingual"
+                title="拆分带换行的双行字幕为两行，保持时间轴一致并提取内联样式"
+              >
+                {{ splitLoading ? '处理中...' : '拆分双行字幕' }}
+              </button>
+              <button
+                class="px-2.5 py-1 text-xs bg-orange-600 text-white rounded hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                :disabled="store.items.length === 0 || splitLoading || cleanLoading"
+                @click="cleanDialogVisible = true"
+                title="清理 Dialogue 文本块中的中文符号"
+              >
+                清理中文符号
+              </button>
+              <button
+                class="px-2.5 py-1 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-700"
                 @click="sourceViewVisible = true"
               >
                 源文件视图
               </button>
-              <button class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700" @click="handleExportFile">
+              <button class="px-2.5 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700" @click="handleExportFile">
                 导出
               </button>
-              <button class="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300" @click="handleCloseFile">
+              <button class="px-2.5 py-1 text-xs bg-gray-200 text-gray-700 rounded hover:bg-gray-300" @click="handleCloseFile">
                 关闭
               </button>
             </div>
+          </div>
+          <div v-if="topActionMessage" class="mb-2">
+            <span class="top-action-result">{{ topActionMessage }}</span>
           </div>
 
           <!-- Table View -->
@@ -266,7 +328,6 @@ function applyStructureNormalization(selectedStyleIds: string[]) {
 
           <!-- Styles View -->
           <template v-else-if="currentView === 'styles'">
-            <MainToolbar mode="split-only" />
             <StyleEditor />
           </template>
         </div>
@@ -285,6 +346,40 @@ function applyStructureNormalization(selectedStyleIds: string[]) {
       @close="styleSelectionVisible = false"
       @confirm="applyStructureNormalization"
     />
+    <div v-if="splitLoading" class="split-loading-overlay">
+      <div class="split-loading-panel">
+        <span class="spinner" />
+        <span>正在拆分双行字幕，请稍候...</span>
+      </div>
+    </div>
+    <div v-if="cleanLoading" class="split-loading-overlay">
+      <div class="split-loading-panel">
+        <span class="spinner" />
+        <span>正在清理中文符号，请稍候...</span>
+      </div>
+    </div>
+    <div v-if="cleanDialogVisible" class="clean-modal-overlay" @click.self="cleanDialogVisible = false">
+      <div class="clean-modal-panel">
+        <h4 class="clean-modal-title">清理中文符号</h4>
+        <p class="clean-modal-desc">处理范围：Dialogue 的 Text 文本块（存在选中行时仅处理选中）。</p>
+        <label class="clean-modal-field">
+          <span>替换目标</span>
+          <select v-model="cleanReplacement" class="clean-modal-select">
+            <option value=" ">空格（默认）</option>
+            <option value="">删除</option>
+            <option value=",">英文逗号 ,</option>
+            <option value=".">英文句号 .</option>
+            <option value="-">短横线 -</option>
+          </select>
+        </label>
+        <div class="clean-modal-actions">
+          <button class="clean-btn ghost" @click="cleanDialogVisible = false">取消</button>
+          <button class="clean-btn primary" :disabled="cleanLoading" @click="handleCleanChinesePunctuation">
+            开始清理
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -307,9 +402,18 @@ function applyStructureNormalization(selectedStyleIds: string[]) {
 }
 
 .main-content {
-  width: min(1920px, 98vw);
+  width: min(1920px, 99vw);
   margin: 0 auto;
-  padding: 1.25rem 1.5rem 1.75rem;
+  padding: 0.6rem 0.5rem 0.5rem;
+}
+
+.top-action-result {
+  font-size: 12px;
+  color: #065f46;
+  background: #d1fae5;
+  border: 1px solid #6ee7b7;
+  border-radius: 999px;
+  padding: 3px 9px;
 }
 
 .file-input-section {
@@ -458,5 +562,118 @@ function applyStructureNormalization(selectedStyleIds: string[]) {
 .subtitle-table-container {
   margin-top: 1rem;
   max-height: 600px;
+}
+
+.clean-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 130;
+  background: rgba(15, 23, 42, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.clean-modal-panel {
+  width: min(420px, 94vw);
+  background: #fff;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.15);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.clean-modal-title {
+  margin: 0;
+  font-size: 16px;
+  color: #111827;
+}
+
+.clean-modal-desc {
+  margin: 0;
+  font-size: 13px;
+  color: #4b5563;
+}
+
+.clean-modal-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: #374151;
+}
+
+.clean-modal-select {
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: #fff;
+  color: #111827;
+}
+
+.clean-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.clean-btn {
+  border-radius: 8px;
+  padding: 7px 12px;
+  font-size: 13px;
+  border: 1px solid transparent;
+}
+
+.clean-btn.ghost {
+  background: #fff;
+  border-color: #d1d5db;
+  color: #374151;
+}
+
+.clean-btn.primary {
+  background: #ea580c;
+  color: #fff;
+}
+
+.split-loading-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  background: rgba(15, 23, 42, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.split-loading-panel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  padding: 12px 16px;
+  color: #1f2937;
+  font-size: 14px;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.12);
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #cbd5e1;
+  border-top-color: #0f766e;
+  border-radius: 999px;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>

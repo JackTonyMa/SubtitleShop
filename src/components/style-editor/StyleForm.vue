@@ -303,13 +303,13 @@ function updateStyle(updates: Partial<AssStyle>) {
 
 <style scoped>
 .style-form {
-  padding: 0.8rem 1rem;
+  padding: 0.5rem 0.65rem;
 }
 
 .form-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.75rem 0.9rem;
+  gap: 0.5rem 0.6rem;
 }
 
 .form-group-span-2 {
@@ -319,16 +319,16 @@ function updateStyle(updates: Partial<AssStyle>) {
 .form-group {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
-  padding: 0.55rem 0.65rem;
+  gap: 0.3rem;
+  padding: 0.4rem 0.5rem;
   border: 1px solid #e5e7eb;
-  border-radius: 0.6rem;
+  border-radius: 0.45rem;
   background-color: #f8fafc;
   min-width: 0;
 }
 
 .form-label {
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   font-weight: 500;
   color: #374151;
 }
@@ -340,7 +340,7 @@ function updateStyle(updates: Partial<AssStyle>) {
 }
 
 .form-value {
-  font-size: 0.75rem;
+  font-size: 0.6875rem;
   color: #6b7280;
   font-variant-numeric: tabular-nums;
 }
@@ -348,10 +348,10 @@ function updateStyle(updates: Partial<AssStyle>) {
 .form-input {
   width: 100%;
   min-width: 0;
-  padding: 0.45rem 0.65rem;
+  padding: 0.34rem 0.5rem;
   border: 1px solid #d1d5db;
-  border-radius: 0.45rem;
-  font-size: 0.8125rem;
+  border-radius: 0.4rem;
+  font-size: 0.75rem;
   background-color: white;
   transition: border-color 0.15s ease;
 }
@@ -364,7 +364,7 @@ function updateStyle(updates: Partial<AssStyle>) {
 
 .form-slider {
   width: 100%;
-  height: 0.38rem;
+  height: 0.3rem;
   background-color: #e5e7eb;
   border-radius: 0.25rem;
   appearance: none;
@@ -373,8 +373,8 @@ function updateStyle(updates: Partial<AssStyle>) {
 
 .form-slider::-webkit-slider-thumb {
   appearance: none;
-  width: 0.85rem;
-  height: 0.85rem;
+  width: 0.78rem;
+  height: 0.78rem;
   background-color: #3b82f6;
   border-radius: 50%;
   cursor: pointer;
@@ -386,11 +386,11 @@ function updateStyle(updates: Partial<AssStyle>) {
 }
 
 .form-color-picker {
-  width: 2.3rem;
-  height: 1.65rem;
+  width: 2rem;
+  height: 1.45rem;
   padding: 0;
   border: 1px solid #d1d5db;
-  border-radius: 0.45rem;
+  border-radius: 0.4rem;
   cursor: pointer;
   background: none;
 }
@@ -398,11 +398,11 @@ function updateStyle(updates: Partial<AssStyle>) {
 .color-row {
   display: flex;
   align-items: center;
-  gap: 0.45rem;
+  gap: 0.35rem;
 }
 
 .color-code {
-  font-size: 0.75rem;
+  font-size: 0.6875rem;
   color: #6b7280;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
@@ -418,14 +418,14 @@ function updateStyle(updates: Partial<AssStyle>) {
 .toggle-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.6rem 0.9rem;
+  gap: 0.4rem 0.65rem;
 }
 
 .toggle-item {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  font-size: 0.8125rem;
+  gap: 0.28rem;
+  font-size: 0.75rem;
   cursor: pointer;
 }
 
@@ -444,7 +444,7 @@ function updateStyle(updates: Partial<AssStyle>) {
 .position-hints {
   display: flex;
   justify-content: space-between;
-  font-size: 0.6875rem;
+  font-size: 0.625rem;
   color: #6b7280;
 }
 

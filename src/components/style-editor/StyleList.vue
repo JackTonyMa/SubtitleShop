@@ -1,12 +1,16 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { AssStyle } from '../../core/models/AssStyle'
-import type { StyleRoleInfo } from '../../utils/bilingualDetection'
 import { PRESET_STYLES } from '../../components/preset-styles'
+import { assColorToCss } from '../../utils/assColor'
 
 const props = defineProps<{
   styles: AssStyle[]
   selectedStyleName: string | null
-  styleRoles?: Record<string, StyleRoleInfo>
+  activePresetId?: string | null
+  hideUnusedStyles: boolean
+  hiddenUnusedStyleCount: number
+  styleReferenceCounts: Record<string, number>
 }>()
 
 const emit = defineEmits<{
@@ -16,7 +20,13 @@ const emit = defineEmits<{
   (e: 'rename', styleName: string): void
   (e: 'delete', styleName: string): void
   (e: 'previewPreset', presetId: string): void
+  (e: 'updateHideUnusedStyles', value: boolean): void
 }>()
+
+const visibleStyles = computed(() => {
+  if (!props.hideUnusedStyles) return props.styles
+  return props.styles.filter(style => (props.styleReferenceCounts[style.name] || 0) > 0)
+})
 
 function handleSelect(styleName: string) {
   emit('select', styleName)
@@ -48,13 +58,13 @@ function handlePreviewPreset(presetId: string) {
   emit('previewPreset', presetId)
 }
 
-function getStyleSummary(style: AssStyle): string {
-  const features: string[] = []
-  if (style.bold) features.push('粗')
-  if (style.italic) features.push('斜')
-  if (style.outline > 0) features.push(`描${style.outline}`)
-  if (style.shadow > 0) features.push(`影${style.shadow}`)
-  return features.join(' ') || '默认'
+function getStyleIconStyle(style: AssStyle) {
+  return {
+    fontFamily: style.fontName,
+    fontWeight: style.bold ? 'bold' : 'normal',
+    fontStyle: style.italic ? 'italic' : 'normal',
+    color: assColorToCss(style.primaryColor),
+  }
 }
 
 </script>
@@ -65,8 +75,19 @@ function getStyleSummary(style: AssStyle): string {
     <div class="list-section">
       <div class="section-header">
         <span class="section-title">内置样式</span>
-        <span class="section-count">{{ styles.length }}</span>
+        <div class="section-header-meta">
+          <span class="section-count">{{ visibleStyles.length }}</span>
+          <span v-if="hiddenUnusedStyleCount > 0" class="section-hidden-note">已隐藏 {{ hiddenUnusedStyleCount }} 条</span>
+        </div>
       </div>
+      <label class="section-toggle">
+        <input
+          type="checkbox"
+          :checked="hideUnusedStyles"
+          @change="emit('updateHideUnusedStyles', ($event.target as HTMLInputElement).checked)"
+        />
+        <span>仅显示有引用的样式</span>
+      </label>
 
       <!-- Action Buttons -->
       <div class="action-buttons">
@@ -118,23 +139,19 @@ function getStyleSummary(style: AssStyle): string {
       <!-- Styles List -->
       <div class="styles-list">
         <button
-          v-for="style in styles"
+          v-for="style in visibleStyles"
           :key="style.name"
           class="style-item"
-          :class="{ active: style.name === selectedStyleName }"
+          :class="{ active: style.name === selectedStyleName && !activePresetId }"
           @click="handleSelect(style.name)"
         >
+          <div class="style-icon" :style="getStyleIconStyle(style)">
+            Aa
+          </div>
           <div class="style-item-content">
             <span class="style-name-row">
               <span class="style-name">{{ style.name }}</span>
             </span>
-            <span class="style-summary">{{ getStyleSummary(style) }}</span>
-            <span v-if="styleRoles?.[style.name]" class="style-confidence">
-              识别置信度 {{ Math.round(styleRoles[style.name].confidence * 100) }}% · {{ styleRoles[style.name].reason }}
-            </span>
-          </div>
-          <div class="style-preview-mini" :style="{ fontFamily: style.fontName }">
-            Aa
           </div>
         </button>
       </div>
@@ -151,6 +168,7 @@ function getStyleSummary(style: AssStyle): string {
           v-for="preset in PRESET_STYLES"
           :key="preset.id"
           class="preset-item"
+          :class="{ active: preset.id === activePresetId }"
           type="button"
           @click="handlePreviewPreset(preset.id)"
           title="预设样式（仅展示）"
@@ -159,6 +177,7 @@ function getStyleSummary(style: AssStyle): string {
             fontFamily: preset.style.fontName,
             fontWeight: preset.style.bold ? 'bold' : 'normal',
             fontStyle: preset.style.italic ? 'italic' : 'normal',
+            color: assColorToCss(preset.style.primaryColor),
           }">
             Aa
           </div>
@@ -197,6 +216,12 @@ function getStyleSummary(style: AssStyle): string {
   border-bottom: 1px solid #e5e7eb;
 }
 
+.section-header-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
 .section-title {
   font-size: 0.875rem;
   font-weight: 600;
@@ -209,6 +234,23 @@ function getStyleSummary(style: AssStyle): string {
   background-color: #f3f4f6;
   padding: 0.125rem 0.5rem;
   border-radius: 9999px;
+}
+
+.section-hidden-note {
+  font-size: 0.68rem;
+  color: #9a3412;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 999px;
+  padding: 0.1rem 0.4rem;
+}
+
+.section-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+  color: #4b5563;
 }
 
 .action-buttons {
@@ -285,7 +327,7 @@ function getStyleSummary(style: AssStyle): string {
 .style-item {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 0.75rem;
   padding: 0.75rem;
   border: 1px solid #e5e7eb;
   border-radius: 0.375rem;
@@ -309,6 +351,7 @@ function getStyleSummary(style: AssStyle): string {
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
+  min-width: 0;
 }
 
 .style-name-row {
@@ -321,22 +364,22 @@ function getStyleSummary(style: AssStyle): string {
   font-size: 0.875rem;
   font-weight: 500;
   color: #111827;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.style-summary {
-  font-size: 0.75rem;
-  color: #6b7280;
-}
-
-.style-confidence {
-  font-size: 0.7rem;
-  color: #6b7280;
-  line-height: 1.3;
-}
-
-.style-preview-mini {
+.style-icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #9ca3af;
+  border-radius: 0.375rem;
   font-size: 1rem;
-  color: #6b7280;
+  border: 1px solid #6b7280;
+  flex-shrink: 0;
 }
 
 .presets-list {
@@ -363,16 +406,23 @@ function getStyleSummary(style: AssStyle): string {
   border-color: #3b82f6;
 }
 
+.preset-item.active {
+  background-color: #eff6ff;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.15);
+}
+
 .preset-icon {
   width: 2.5rem;
   height: 2.5rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #f3f4f6;
+  background-color: #9ca3af;
   border-radius: 0.375rem;
   font-size: 1rem;
   color: #374151;
+  border: 1px solid #6b7280;
 }
 
 .preset-info {
