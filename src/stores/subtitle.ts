@@ -444,6 +444,76 @@ export const useSubtitleStore = defineStore('subtitle', () => {
     return changedCount
   }
 
+  function updateScriptResolution(params: {
+    playResX: number
+    playResY: number
+    scaledBorderAndShadow: boolean
+    resample: boolean
+  }) {
+    if (!currentFile.value) {
+      return { ok: false as const, reason: '当前没有已加载文件', styleChanged: 0, itemChanged: 0 }
+    }
+
+    const nextX = Math.max(1, Math.round(params.playResX))
+    const nextY = Math.max(1, Math.round(params.playResY))
+    const scriptInfo = { ...(currentFile.value.scriptInfo || {}) }
+    const prevX = parsePositiveInt(scriptInfo.PlayResX, 1920)
+    const prevY = parsePositiveInt(scriptInfo.PlayResY, 1080)
+
+    scriptInfo.PlayResX = String(nextX)
+    scriptInfo.PlayResY = String(nextY)
+    scriptInfo.ScaledBorderAndShadow = params.scaledBorderAndShadow ? 'yes' : 'no'
+
+    let styleChanged = 0
+    let itemChanged = 0
+    const needResample = params.resample && (nextX !== prevX || nextY !== prevY)
+    if (needResample) {
+      const sx = nextX / prevX
+      const sy = nextY / prevY
+      const impact = estimateResolutionImpactWithScale(styles.value, items.value, sx, sy)
+      styleChanged = impact.styleChanged
+      itemChanged = impact.itemChanged
+      styles.value = impact.nextStyles
+      items.value = impact.nextItems
+    }
+
+    currentFile.value.scriptInfo = scriptInfo
+
+    return {
+      ok: true as const,
+      styleChanged,
+      itemChanged,
+    }
+  }
+
+  function estimateResolutionImpact(params: {
+    playResX: number
+    playResY: number
+    resample: boolean
+  }) {
+    if (!currentFile.value) {
+      return { ok: false as const, reason: '当前没有已加载文件', styleChanged: 0, itemChanged: 0 }
+    }
+    const nextX = Math.max(1, Math.round(params.playResX))
+    const nextY = Math.max(1, Math.round(params.playResY))
+    const scriptInfo = currentFile.value.scriptInfo || {}
+    const prevX = parsePositiveInt(scriptInfo.PlayResX, 1920)
+    const prevY = parsePositiveInt(scriptInfo.PlayResY, 1080)
+
+    if (!params.resample || (nextX === prevX && nextY === prevY)) {
+      return { ok: true as const, styleChanged: 0, itemChanged: 0 }
+    }
+
+    const sx = nextX / prevX
+    const sy = nextY / prevY
+    const impact = estimateResolutionImpactWithScale(styles.value, items.value, sx, sy)
+    return {
+      ok: true as const,
+      styleChanged: impact.styleChanged,
+      itemChanged: impact.itemChanged,
+    }
+  }
+
   function getExportData(): Partial<SubtitleFile> {
     if (!currentFile.value) {
       return {}
@@ -489,6 +559,8 @@ export const useSubtitleStore = defineStore('subtitle', () => {
     batchReplaceText,
     splitBilingualLines,
     cleanChinesePunctuation,
+    updateScriptResolution,
+    estimateResolutionImpact,
     getExportData,
     undo,
     redo,
@@ -593,4 +665,189 @@ function resolveOrCreateSplitStyleName(
   nextStyles.push(nextStyle)
   styleByName.set(nextName, nextStyle)
   return nextName
+}
+
+function parsePositiveInt(raw: string | undefined, fallback: number): number {
+  const n = Number.parseInt(raw || '', 10)
+  return Number.isFinite(n) && n > 0 ? n : fallback
+}
+
+function roundInt(value: number): number {
+  return Math.max(0, Math.round(value))
+}
+
+function round2(value: number): number {
+  return Math.round(value * 100) / 100
+}
+
+function formatScaledNumber(value: number): string {
+  const rounded = Math.round(value * 1000) / 1000
+  const asText = String(rounded)
+  return asText.includes('.') ? asText.replace(/\.?0+$/, '') : asText
+}
+
+function scaleAssNumber(raw: string, scale: number): string {
+  const parsed = Number.parseFloat(raw)
+  if (!Number.isFinite(parsed)) return raw
+  return formatScaledNumber(parsed * scale)
+}
+
+function scaleStyleForResolution(style: AssStyle, sx: number, sy: number): AssStyle {
+  return {
+    ...style,
+    fontSize: round2(style.fontSize * sy),
+    spacing: round2(style.spacing * sx),
+    outline: round2(style.outline * sy),
+    shadow: round2(style.shadow * sy),
+    marginL: roundInt(style.marginL * sx),
+    marginR: roundInt(style.marginR * sx),
+    marginV: roundInt(style.marginV * sy),
+  }
+}
+
+function isSameStyle(a: AssStyle, b: AssStyle): boolean {
+  return [
+    a.name === b.name,
+    a.fontName === b.fontName,
+    a.fontSize === b.fontSize,
+    a.primaryColor === b.primaryColor,
+    a.secondaryColor === b.secondaryColor,
+    a.outlineColor === b.outlineColor,
+    a.backColor === b.backColor,
+    a.bold === b.bold,
+    a.italic === b.italic,
+    a.underline === b.underline,
+    a.strikeOut === b.strikeOut,
+    a.scaleX === b.scaleX,
+    a.scaleY === b.scaleY,
+    a.spacing === b.spacing,
+    a.angle === b.angle,
+    a.borderStyle === b.borderStyle,
+    a.outline === b.outline,
+    a.shadow === b.shadow,
+    a.alignment === b.alignment,
+    a.marginL === b.marginL,
+    a.marginR === b.marginR,
+    a.marginV === b.marginV,
+    a.encoding === b.encoding,
+  ].every(Boolean)
+}
+
+function scaleItemForResolution(item: SubtitleItem, sx: number, sy: number): SubtitleItem {
+  if (!item.assText || !item.hasInlineOverrides) return item
+  const nextAssText = scaleAssOverrideCoordinates(item.assText, sx, sy)
+  if (nextAssText === item.assText) return item
+  return {
+    ...item,
+    assText: nextAssText,
+    text: stripAssTags(nextAssText),
+    hasInlineOverrides: /{\\[^}]+}/.test(nextAssText),
+  }
+}
+
+function estimateResolutionImpactWithScale(styles: AssStyle[], items: SubtitleItem[], sx: number, sy: number) {
+  let styleChanged = 0
+  let itemChanged = 0
+
+  const nextStyles = styles.map((style) => {
+    const nextStyle = scaleStyleForResolution(style, sx, sy)
+    if (isSameStyle(style, nextStyle)) return style
+    styleChanged += 1
+    return nextStyle
+  })
+
+  const nextItems = items.map((item) => {
+    const nextItem = scaleItemForResolution(item, sx, sy)
+    if (nextItem === item) return item
+    itemChanged += 1
+    return nextItem
+  })
+
+  return {
+    nextStyles,
+    nextItems,
+    styleChanged,
+    itemChanged,
+  }
+}
+
+function scaleAssOverrideCoordinates(text: string, sx: number, sy: number): string {
+  let next = text
+
+  next = next.replace(
+    /\\pos\(\s*([-+]?\d*\.?\d+)\s*,\s*([-+]?\d*\.?\d+)\s*\)/gi,
+    (_m, x, y) => `\\pos(${scaleAssNumber(x, sx)},${scaleAssNumber(y, sy)})`
+  )
+  next = next.replace(
+    /\\org\(\s*([-+]?\d*\.?\d+)\s*,\s*([-+]?\d*\.?\d+)\s*\)/gi,
+    (_m, x, y) => `\\org(${scaleAssNumber(x, sx)},${scaleAssNumber(y, sy)})`
+  )
+  next = next.replace(
+    /\\move\(\s*([-+]?\d*\.?\d+)\s*,\s*([-+]?\d*\.?\d+)\s*,\s*([-+]?\d*\.?\d+)\s*,\s*([-+]?\d*\.?\d+)\s*,\s*([-+]?\d+)\s*,\s*([-+]?\d+)\s*\)/gi,
+    (_m, x1, y1, x2, y2, t1, t2) =>
+      `\\move(${scaleAssNumber(x1, sx)},${scaleAssNumber(y1, sy)},${scaleAssNumber(x2, sx)},${scaleAssNumber(y2, sy)},${t1},${t2})`
+  )
+  next = next.replace(
+    /\\move\(\s*([-+]?\d*\.?\d+)\s*,\s*([-+]?\d*\.?\d+)\s*,\s*([-+]?\d*\.?\d+)\s*,\s*([-+]?\d*\.?\d+)\s*\)/gi,
+    (_m, x1, y1, x2, y2) =>
+      `\\move(${scaleAssNumber(x1, sx)},${scaleAssNumber(y1, sy)},${scaleAssNumber(x2, sx)},${scaleAssNumber(y2, sy)})`
+  )
+
+  next = next.replace(
+    /\\(i?clip)\(\s*([-+]?\d*\.?\d+)\s*,\s*([-+]?\d*\.?\d+)\s*,\s*([-+]?\d*\.?\d+)\s*,\s*([-+]?\d*\.?\d+)\s*\)/gi,
+    (_m, tag, x1, y1, x2, y2) =>
+      `\\${tag}(${scaleAssNumber(x1, sx)},${scaleAssNumber(y1, sy)},${scaleAssNumber(x2, sx)},${scaleAssNumber(y2, sy)})`
+  )
+
+  next = next.replace(/\\(i?clip)\(([^)]*)\)/gi, (all, tag, args) => {
+    if (/^\s*[-+]?\d*\.?\d+\s*,\s*[-+]?\d*\.?\d+\s*,\s*[-+]?\d*\.?\d+\s*,\s*[-+]?\d*\.?\d+\s*$/.test(args)) {
+      return all
+    }
+    const trimmed = String(args).trim()
+    const comma = trimmed.indexOf(',')
+    if (comma > 0 && /^\d+$/.test(trimmed.slice(0, comma).trim())) {
+      const scalePrefix = trimmed.slice(0, comma).trim()
+      const drawing = trimmed.slice(comma + 1).trim()
+      return `\\${tag}(${scalePrefix},${scaleAssDrawingPath(drawing, sx, sy)})`
+    }
+    return `\\${tag}(${scaleAssDrawingPath(trimmed, sx, sy)})`
+  })
+
+  next = next.replace(/\\fs\s*([-+]?\d*\.?\d+)/gi, (_m, n) => `\\fs${scaleAssNumber(n, sy)}`)
+  next = next.replace(/\\fsp\s*([-+]?\d*\.?\d+)/gi, (_m, n) => `\\fsp${scaleAssNumber(n, sx)}`)
+  next = next.replace(/\\bord\s*([-+]?\d*\.?\d+)/gi, (_m, n) => `\\bord${scaleAssNumber(n, sy)}`)
+  next = next.replace(/\\xbord\s*([-+]?\d*\.?\d+)/gi, (_m, n) => `\\xbord${scaleAssNumber(n, sx)}`)
+  next = next.replace(/\\ybord\s*([-+]?\d*\.?\d+)/gi, (_m, n) => `\\ybord${scaleAssNumber(n, sy)}`)
+  next = next.replace(/\\shad\s*([-+]?\d*\.?\d+)/gi, (_m, n) => `\\shad${scaleAssNumber(n, sy)}`)
+  next = next.replace(/\\xshad\s*([-+]?\d*\.?\d+)/gi, (_m, n) => `\\xshad${scaleAssNumber(n, sx)}`)
+  next = next.replace(/\\yshad\s*([-+]?\d*\.?\d+)/gi, (_m, n) => `\\yshad${scaleAssNumber(n, sy)}`)
+
+  return next
+}
+
+function scaleAssDrawingPath(path: string, sx: number, sy: number): string {
+  if (!path.trim()) return path
+  const commandToken = /^[mnlbspc]$/i
+  const numberToken = /^[-+]?\d*\.?\d+$/
+  const tokens = path.trim().split(/\s+/)
+  const out: string[] = []
+  let pairIndex = 0
+
+  for (const token of tokens) {
+    if (commandToken.test(token)) {
+      out.push(token)
+      pairIndex = 0
+      continue
+    }
+    if (!numberToken.test(token)) {
+      out.push(token)
+      continue
+    }
+
+    const scale = pairIndex % 2 === 0 ? sx : sy
+    out.push(scaleAssNumber(token, scale))
+    pairIndex += 1
+  }
+
+  return out.join(' ')
 }

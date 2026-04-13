@@ -1,7 +1,24 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import type { AssStyle } from '../../core/models/AssStyle'
 import { assColorToCss, cssToAssColor } from '../../utils/assColor'
+
+const FONT_PRESET_OPTIONS = [
+  { label: '黑体', value: 'SimHei', aliases: ['黑体', 'heiti', 'simhei'] },
+  { label: '宋体', value: 'SimSun', aliases: ['宋体', 'simsun'] },
+  { label: '楷体', value: 'KaiTi', aliases: ['楷体', 'kaiti'] },
+  { label: '苹方', value: 'PingFang SC', aliases: ['苹方', 'pingfang', 'pingfangsc', 'pingfang sc'] },
+  { label: '微软雅黑', value: 'Microsoft YaHei', aliases: ['微软雅黑', 'microsoft yahei', 'microsoftyahei'] },
+  { label: '思源黑体', value: 'Source Han Sans SC', aliases: ['思源黑体', 'source han sans', 'source han sans sc', 'sourcehansans', 'sourcehansanssc'] },
+  { label: '冬青黑体', value: 'Hiragino Sans GB', aliases: ['冬青黑体', 'hiragino sans gb', 'hiraginosansgb'] },
+  { label: '思源宋体', value: 'Source Han Serif SC', aliases: ['思源宋体', 'source han serif', 'source han serif sc', 'sourcehanserif', 'sourcehanserifsc'] },
+  { label: '方正清刻', value: 'FZQKBYSJW', aliases: ['方正清刻', 'fzqkbysjw'] },
+  { label: '方正幼圆', value: 'YouYuan', aliases: ['方正幼圆', '幼圆', 'youyuan'] },
+  { label: 'OPPOSans', value: 'OPPOSans', aliases: ['opposans', 'oppo sans'] },
+  { label: 'Arial', value: 'Arial', aliases: ['arial'] },
+  { label: 'Helvetica', value: 'Helvetica', aliases: ['helvetica'] },
+  { label: 'Roboto', value: 'Roboto', aliases: ['roboto'] },
+] as const
 
 const props = withDefaults(defineProps<{
   modelValue: AssStyle
@@ -22,6 +39,93 @@ const style = computed({
   get: () => props.modelValue,
   set: (value) => emit('update:modelValue', value)
 })
+
+const fontSizeDraft = ref(String(props.modelValue.fontSize))
+const outlineDraft = ref(String(props.modelValue.outline))
+const shadowDraft = ref(String(props.modelValue.shadow))
+const primaryColorText = ref(assColorToCss(props.modelValue.primaryColor))
+const outlineColorText = ref(assColorToCss(props.modelValue.outlineColor))
+const fontDropdownOpen = ref(false)
+const fontInputRef = ref<HTMLInputElement | null>(null)
+const fontDisplayDraft = ref('')
+
+// 根据 fontName (value) 查找对应的 label，找不到则返回 fontName 本身
+function getFontLabelByValue(value: string): string {
+  const matched = FONT_PRESET_OPTIONS.find(opt => opt.value === value)
+  return matched?.label || value
+}
+
+// 根据用户输入尝试匹配到 value，匹配不到则返回原始输入值
+function resolveFontValueFromInput(input: string): string {
+  const trimmed = input.trim()
+  if (!trimmed) return ''
+  const normalized = trimmed.toLowerCase().replace(/\s+/g, '')
+  // 先尝试匹配 label
+  const byLabel = FONT_PRESET_OPTIONS.find(opt =>
+    opt.label.toLowerCase().replace(/\s+/g, '') === normalized
+  )
+  if (byLabel) return byLabel.value
+  // 再尝试匹配 aliases
+  const byAlias = FONT_PRESET_OPTIONS.find(opt =>
+    opt.aliases.some(alias => alias.toLowerCase().replace(/\s+/g, '') === normalized)
+  )
+  if (byAlias) return byAlias.value
+  // 最后尝试匹配 value
+  const byValue = FONT_PRESET_OPTIONS.find(opt =>
+    opt.value.toLowerCase().replace(/\s+/g, '') === normalized
+  )
+  if (byValue) return byValue.value
+  // 都匹配不到，返回原始输入
+  return trimmed
+}
+
+watch(
+  () => props.modelValue.fontName,
+  (value) => {
+    fontDisplayDraft.value = getFontLabelByValue(value)
+  },
+  { immediate: true }
+)
+
+watch(
+  () => props.modelValue.fontSize,
+  (value) => {
+    fontSizeDraft.value = String(value)
+  },
+  { immediate: true }
+)
+
+watch(
+  () => props.modelValue.outline,
+  (value) => {
+    outlineDraft.value = String(value)
+  },
+  { immediate: true }
+)
+
+watch(
+  () => props.modelValue.shadow,
+  (value) => {
+    shadowDraft.value = String(value)
+  },
+  { immediate: true }
+)
+
+watch(
+  () => props.modelValue.primaryColor,
+  (value) => {
+    primaryColorText.value = assColorToCss(value)
+  },
+  { immediate: true }
+)
+
+watch(
+  () => props.modelValue.outlineColor,
+  (value) => {
+    outlineColorText.value = assColorToCss(value)
+  },
+  { immediate: true }
+)
 
 const primaryColorCss = computed({
   get: () => assColorToCss(style.value.primaryColor),
@@ -44,12 +148,8 @@ const styleName = computed({
   }
 })
 
-const fontName = computed({
-  get: () => style.value.fontName,
-  set: (value: string) => {
-    updateStyle({ fontName: value })
-  }
-})
+// fontName 不再直接用于输入框，只用于内部读取
+// 输入框显示的是 fontDisplayDraft（label 或原始值）
 
 const horizontalPosition = computed({
   get: () => {
@@ -115,6 +215,139 @@ function updateStyle(updates: Partial<AssStyle>) {
   style.value = { ...style.value, ...updates }
 }
 
+function clampNumber(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value))
+}
+
+function toggleFontDropdown() {
+  fontDropdownOpen.value = !fontDropdownOpen.value
+}
+
+function selectFontOption(value: string) {
+  updateStyle({ fontName: value })
+  fontDisplayDraft.value = getFontLabelByValue(value)
+  fontDropdownOpen.value = false
+}
+
+function handleFontInputBlur() {
+  const resolvedValue = resolveFontValueFromInput(fontDisplayDraft.value)
+  updateStyle({ fontName: resolvedValue })
+  fontDisplayDraft.value = getFontLabelByValue(resolvedValue)
+  fontDropdownOpen.value = false
+}
+
+function handleFontDropdownClickOutside(event: MouseEvent) {
+  const target = event.target as HTMLElement
+  if (fontInputRef.value && !fontInputRef.value.contains(target)) {
+    fontDropdownOpen.value = false
+  }
+}
+
+function updateNumericStyle<K extends 'fontSize' | 'outline' | 'shadow'>(
+  key: K,
+  rawValue: number,
+  min: number,
+  max: number
+) {
+  updateStyle({ [key]: clampNumber(rawValue, min, max) } as Pick<AssStyle, K>)
+}
+
+function sanitizeIntegerInput(value: string): string {
+  return value.replace(/[^\d]/g, '')
+}
+
+function sanitizeDecimalInput(value: string): string {
+  const sanitized = value.replace(/[^\d.]/g, '')
+  const [integerPart, ...rest] = sanitized.split('.')
+  if (rest.length === 0) return sanitized
+  return `${integerPart}.${rest.join('')}`
+}
+
+function handleNumericDraftInput(
+  key: 'fontSize' | 'outline' | 'shadow',
+  rawValue: string
+) {
+  const nextValue = key === 'fontSize'
+    ? sanitizeIntegerInput(rawValue)
+    : sanitizeDecimalInput(rawValue)
+
+  if (key === 'fontSize') {
+    fontSizeDraft.value = nextValue
+    return
+  }
+  if (key === 'outline') {
+    outlineDraft.value = nextValue
+    return
+  }
+  shadowDraft.value = nextValue
+}
+
+function commitNumericDraft(
+  key: 'fontSize' | 'outline' | 'shadow',
+  min: number,
+  max: number
+) {
+  const currentDraft = key === 'fontSize'
+    ? fontSizeDraft.value
+    : key === 'outline'
+      ? outlineDraft.value
+      : shadowDraft.value
+  const fallbackValue = key === 'fontSize'
+    ? 8
+    : key === 'outline'
+      ? style.value.outline
+      : style.value.shadow
+
+  if (!currentDraft || currentDraft === '.') {
+    updateNumericStyle(key, fallbackValue, min, max)
+    return
+  }
+
+  const parsed = Number.parseFloat(currentDraft)
+  if (Number.isNaN(parsed)) {
+    updateNumericStyle(key, fallbackValue, min, max)
+    return
+  }
+
+  updateNumericStyle(key, parsed, min, max)
+}
+
+function isValidCssHexColor(value: string): boolean {
+  return /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(value.trim())
+}
+
+function handleColorTextInput(kind: 'primary' | 'outline', value: string) {
+  if (kind === 'primary') {
+    primaryColorText.value = value
+    return
+  }
+  outlineColorText.value = value
+}
+
+function commitColorTextInput(kind: 'primary' | 'outline') {
+  const currentValue = (kind === 'primary' ? primaryColorText.value : outlineColorText.value).trim()
+  if (!isValidCssHexColor(currentValue)) {
+    const fallback = kind === 'primary'
+      ? assColorToCss(style.value.primaryColor)
+      : assColorToCss(style.value.outlineColor)
+    if (kind === 'primary') {
+      primaryColorText.value = fallback
+    } else {
+      outlineColorText.value = fallback
+    }
+    return
+  }
+
+  const normalized = currentValue.toLowerCase()
+  if (kind === 'primary') {
+    primaryColorText.value = normalized
+    primaryColorCss.value = normalized
+    return
+  }
+  outlineColorText.value = normalized
+  outlineColorCss.value = normalized
+}
+
 </script>
 
 <template>
@@ -133,13 +366,40 @@ function updateStyle(updates: Partial<AssStyle>) {
 
       <div class="form-group">
         <label class="form-label">字体</label>
-        <input
-          type="text"
-          v-model="fontName"
-          :disabled="readonly"
-          class="form-input"
-          placeholder="输入字体名称"
-        />
+        <div class="font-combobox" ref="fontInputRef" v-on:click-outside="handleFontDropdownClickOutside">
+          <input
+            type="text"
+            v-model="fontDisplayDraft"
+            :disabled="readonly"
+            class="font-input"
+            placeholder="输入或选择字体名称"
+            @blur="handleFontInputBlur"
+          />
+          <button
+            type="button"
+            class="font-dropdown-btn"
+            :disabled="readonly"
+            @click="toggleFontDropdown"
+            aria-label="显示字体选项"
+          >
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <div v-if="fontDropdownOpen && !readonly" class="font-dropdown">
+            <button
+              v-for="option in FONT_PRESET_OPTIONS"
+              :key="option.value"
+              type="button"
+              class="font-option"
+              :class="{ active: style.fontName === option.value }"
+              @click="selectFontOption(option.value)"
+            >
+              <span class="font-option-label">{{ option.label }}</span>
+              <span class="font-option-value">{{ option.value }}</span>
+            </button>
+          </div>
+        </div>
       </div>
 
       <div class="form-group">
@@ -147,15 +407,30 @@ function updateStyle(updates: Partial<AssStyle>) {
           <span>字号</span>
           <span class="form-value">{{ style.fontSize }}px</span>
         </label>
-        <input
-          type="range"
-          :value="style.fontSize"
-          @input="updateStyle({ fontSize: Number(($event.target as HTMLInputElement).value) })"
-          :disabled="readonly"
-          min="8"
-          max="200"
-          class="form-slider"
-        />
+        <div class="control-row">
+          <input
+            type="range"
+            :value="style.fontSize"
+            @input="updateStyle({ fontSize: Number(($event.target as HTMLInputElement).value) })"
+            :disabled="readonly"
+            min="0"
+            max="200"
+            class="form-slider"
+          />
+          <input
+            type="text"
+            inputmode="numeric"
+            :value="fontSizeDraft"
+            @input="handleNumericDraftInput('fontSize', ($event.target as HTMLInputElement).value)"
+            @blur="commitNumericDraft('fontSize', 0, 200)"
+            @keydown.enter="commitNumericDraft('fontSize', 0, 200)"
+            :disabled="readonly"
+            min="0"
+            max="200"
+            step="1"
+            class="form-number-input"
+          />
+        </div>
       </div>
 
       <div class="form-group">
@@ -167,7 +442,15 @@ function updateStyle(updates: Partial<AssStyle>) {
             :disabled="readonly"
             class="form-color-picker"
           />
-          <span class="color-code">{{ primaryColorCss }}</span>
+          <input
+            type="text"
+            :value="primaryColorText"
+            @input="handleColorTextInput('primary', ($event.target as HTMLInputElement).value)"
+            @blur="commitColorTextInput('primary')"
+            :disabled="readonly"
+            class="form-input color-text-input"
+            spellcheck="false"
+          />
         </div>
       </div>
 
@@ -180,7 +463,15 @@ function updateStyle(updates: Partial<AssStyle>) {
             :disabled="readonly"
             class="form-color-picker"
           />
-          <span class="color-code">{{ outlineColorCss }}</span>
+          <input
+            type="text"
+            :value="outlineColorText"
+            @input="handleColorTextInput('outline', ($event.target as HTMLInputElement).value)"
+            @blur="commitColorTextInput('outline')"
+            :disabled="readonly"
+            class="form-input color-text-input"
+            spellcheck="false"
+          />
         </div>
       </div>
 
@@ -225,16 +516,31 @@ function updateStyle(updates: Partial<AssStyle>) {
           <span>描边宽度</span>
           <span class="form-value">{{ style.outline }}</span>
         </label>
-        <input
-          type="range"
-          :value="style.outline"
-          @input="updateStyle({ outline: Number(($event.target as HTMLInputElement).value) })"
-          :disabled="readonly"
-          min="0"
-          max="4"
-          step="0.5"
-          class="form-slider"
-        />
+        <div class="control-row">
+          <input
+            type="range"
+            :value="style.outline"
+            @input="updateStyle({ outline: Number(($event.target as HTMLInputElement).value) })"
+            :disabled="readonly"
+            min="0"
+            max="4"
+            step="0.5"
+            class="form-slider"
+          />
+          <input
+            type="text"
+            inputmode="decimal"
+            :value="outlineDraft"
+            @input="handleNumericDraftInput('outline', ($event.target as HTMLInputElement).value)"
+            @blur="commitNumericDraft('outline', 0, 4)"
+            @keydown.enter="commitNumericDraft('outline', 0, 4)"
+            :disabled="readonly"
+            min="0"
+            max="4"
+            step="0.1"
+            class="form-number-input"
+          />
+        </div>
       </div>
 
       <div class="form-group">
@@ -242,16 +548,31 @@ function updateStyle(updates: Partial<AssStyle>) {
           <span>阴影深度</span>
           <span class="form-value">{{ style.shadow }}</span>
         </label>
-        <input
-          type="range"
-          :value="style.shadow"
-          @input="updateStyle({ shadow: Number(($event.target as HTMLInputElement).value) })"
-          :disabled="readonly"
-          min="0"
-          max="4"
-          step="0.5"
-          class="form-slider"
-        />
+        <div class="control-row">
+          <input
+            type="range"
+            :value="style.shadow"
+            @input="updateStyle({ shadow: Number(($event.target as HTMLInputElement).value) })"
+            :disabled="readonly"
+            min="0"
+            max="4"
+            step="0.5"
+            class="form-slider"
+          />
+          <input
+            type="text"
+            inputmode="decimal"
+            :value="shadowDraft"
+            @input="handleNumericDraftInput('shadow', ($event.target as HTMLInputElement).value)"
+            @blur="commitNumericDraft('shadow', 0, 4)"
+            @keydown.enter="commitNumericDraft('shadow', 0, 4)"
+            :disabled="readonly"
+            min="0"
+            max="4"
+            step="0.1"
+            class="form-number-input"
+          />
+        </div>
       </div>
 
       <div class="form-group">
@@ -371,6 +692,33 @@ function updateStyle(updates: Partial<AssStyle>) {
   cursor: pointer;
 }
 
+.control-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.control-row .form-slider {
+  flex: 1;
+}
+
+.form-number-input {
+  width: 5.25rem;
+  min-width: 5.25rem;
+  padding: 0.34rem 0.45rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.4rem;
+  font-size: 0.75rem;
+  background-color: white;
+  font-variant-numeric: tabular-nums;
+}
+
+.form-number-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
 .form-slider::-webkit-slider-thumb {
   appearance: none;
   width: 0.78rem;
@@ -401,9 +749,8 @@ function updateStyle(updates: Partial<AssStyle>) {
   gap: 0.35rem;
 }
 
-.color-code {
-  font-size: 0.6875rem;
-  color: #6b7280;
+.color-text-input {
+  flex: 1;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
@@ -445,6 +792,103 @@ function updateStyle(updates: Partial<AssStyle>) {
   display: flex;
   justify-content: space-between;
   font-size: 0.625rem;
+  color: #6b7280;
+}
+
+/* Font combobox styles */
+.font-combobox {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.font-input {
+  width: 100%;
+  min-width: 0;
+  padding: 0.34rem 0.5rem;
+  padding-right: 2rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.4rem;
+  font-size: 0.75rem;
+  background-color: white;
+  transition: border-color 0.15s ease;
+}
+
+.font-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.font-dropdown-btn {
+  position: absolute;
+  right: 0.35rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1.5rem;
+  height: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #6b7280;
+  transition: color 0.15s ease;
+}
+
+.font-dropdown-btn:hover {
+  color: #374151;
+}
+
+.font-dropdown-btn:disabled {
+  cursor: not-allowed;
+  color: #9ca3af;
+}
+
+.font-dropdown {
+  position: absolute;
+  top: calc(100% + 0.25rem);
+  left: 0;
+  right: 0;
+  max-height: 12rem;
+  overflow-y: auto;
+  background: white;
+  border: 1px solid #d1d5db;
+  border-radius: 0.4rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  z-index: 50;
+}
+
+.font-option {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  width: 100%;
+  padding: 0.35rem 0.5rem;
+  text-align: left;
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.font-option:hover {
+  background-color: #f3f4f6;
+}
+
+.font-option.active {
+  background-color: #eff6ff;
+}
+
+.font-option-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #1f2937;
+}
+
+.font-option-value {
+  font-size: 0.65rem;
   color: #6b7280;
 }
 

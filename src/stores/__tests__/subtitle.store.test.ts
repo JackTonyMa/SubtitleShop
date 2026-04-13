@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { useSubtitleStore } from '../subtitle'
 import { createAssStyle } from '../../core/models/AssStyle'
+import { createSubtitleFile } from '../../core/models/SubtitleFile'
 
 describe('subtitle store style updates', () => {
   beforeEach(() => {
@@ -104,5 +105,122 @@ describe('subtitle store style updates', () => {
     expect(store.items).toHaveLength(4)
     const bilingualStyles = store.styles.filter(style => style.name === 'CHS' || style.name === 'ENG')
     expect(bilingualStyles).toHaveLength(2)
+  })
+
+  it('estimates and applies resolution resample impact', () => {
+    const store = useSubtitleStore()
+    const baseStyle = createAssStyle({
+      name: 'Default',
+      fontSize: 30,
+      spacing: 2,
+      outline: 3,
+      shadow: 2,
+      marginL: 60,
+      marginR: 60,
+      marginV: 40,
+    })
+    const file = createSubtitleFile({
+      filename: 'a.ass',
+      format: 'ass',
+      styles: [baseStyle],
+      items: [
+        {
+          id: 'line-1',
+          startTime: 0,
+          endTime: 1000,
+          text: 'Test',
+          style: 'Default',
+          assText: '{\\pos(300,150)\\fs30}Test',
+          hasInlineOverrides: true,
+        },
+      ],
+      scriptInfo: {
+        PlayResX: '1920',
+        PlayResY: '1080',
+      },
+    })
+    store.loadFile(file)
+
+    const estimate = store.estimateResolutionImpact({
+      playResX: 1280,
+      playResY: 720,
+      resample: true,
+    })
+
+    expect(estimate.ok).toBe(true)
+    expect(estimate.styleChanged).toBe(1)
+    expect(estimate.itemChanged).toBe(1)
+
+    const result = store.updateScriptResolution({
+      playResX: 1280,
+      playResY: 720,
+      scaledBorderAndShadow: true,
+      resample: true,
+    })
+
+    expect(result.ok).toBe(true)
+    expect(result.styleChanged).toBe(1)
+    expect(result.itemChanged).toBe(1)
+    expect(store.currentFile?.scriptInfo?.PlayResX).toBe('1280')
+    expect(store.currentFile?.scriptInfo?.PlayResY).toBe('720')
+    expect(store.currentFile?.scriptInfo?.ScaledBorderAndShadow).toBe('yes')
+    expect(store.styles[0].fontSize).toBe(20)
+    expect(store.styles[0].marginL).toBe(40)
+    expect(store.items[0].assText).toContain('\\pos(200,100)')
+    expect(store.items[0].assText).toContain('\\fs20')
+  })
+
+  it('updates PlayRes without resampling when requested', () => {
+    const store = useSubtitleStore()
+    const baseStyle = createAssStyle({ name: 'Default', fontSize: 24 })
+    const file = createSubtitleFile({
+      filename: 'b.ass',
+      format: 'ass',
+      styles: [baseStyle],
+      items: [
+        {
+          id: 'line-2',
+          startTime: 0,
+          endTime: 1000,
+          text: 'No Resample',
+          style: 'Default',
+          assText: '{\\pos(400,300)}No Resample',
+          hasInlineOverrides: true,
+        },
+      ],
+      scriptInfo: {
+        PlayResX: '1920',
+        PlayResY: '1080',
+      },
+    })
+    store.loadFile(file)
+
+    const beforeStyle = { ...store.styles[0] }
+    const beforeAssText = store.items[0].assText
+
+    const estimate = store.estimateResolutionImpact({
+      playResX: 1280,
+      playResY: 720,
+      resample: false,
+    })
+    expect(estimate.ok).toBe(true)
+    expect(estimate.styleChanged).toBe(0)
+    expect(estimate.itemChanged).toBe(0)
+
+    const result = store.updateScriptResolution({
+      playResX: 1280,
+      playResY: 720,
+      scaledBorderAndShadow: false,
+      resample: false,
+    })
+
+    expect(result.ok).toBe(true)
+    expect(result.styleChanged).toBe(0)
+    expect(result.itemChanged).toBe(0)
+    expect(store.currentFile?.scriptInfo?.PlayResX).toBe('1280')
+    expect(store.currentFile?.scriptInfo?.PlayResY).toBe('720')
+    expect(store.currentFile?.scriptInfo?.ScaledBorderAndShadow).toBe('no')
+    expect(store.styles[0]).toEqual(beforeStyle)
+    expect(store.items[0].assText).toBe(beforeAssText)
   })
 })

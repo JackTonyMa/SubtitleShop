@@ -24,11 +24,15 @@ describe('StyleEditor', () => {
       },
     })
 
-    const textInputs = wrapper.findAll('input[type="text"]')
-    expect(textInputs.length).toBeGreaterThanOrEqual(2)
+    const styleNameInput = wrapper.find('input[placeholder="输入样式名称"]')
+    const fontNameInput = wrapper.find('input[placeholder="输入或选择字体名称"]')
+    expect(styleNameInput.exists()).toBe(true)
+    expect(fontNameInput.exists()).toBe(true)
 
-    await textInputs[0].setValue('Renamed')
-    await textInputs[1].setValue('Verdana')
+    await styleNameInput.setValue('Renamed')
+    await fontNameInput.setValue('Verdana')
+    await fontNameInput.trigger('blur')  // commit font display draft to store
+    await wrapper.find('button.save-btn').trigger('click')
 
     expect(store.styles[0].name).toBe('Renamed')
     expect(store.styles[0].fontName).toBe('Verdana')

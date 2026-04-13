@@ -33,6 +33,7 @@ const styleSelectionVisible = ref(false)
 const pendingStyleCandidates = ref<AssStyleCandidate[]>([])
 const pendingNormalizeBaseContent = ref('')
 const currentView = ref<'table' | 'styles'>('styles')
+const srtConversionMessage = ref('')
 const splitLoading = ref(false)
 const cleanLoading = ref(false)
 const cleanDialogVisible = ref(false)
@@ -71,6 +72,8 @@ watch(
 async function handleFileSelect(file: File) {
   errorMessage.value = ''
   importWarningMessage.value = ''
+  srtConversionMessage.value = ''
+  currentView.value = 'styles'
 
   try {
     const content = await file.text()
@@ -80,9 +83,14 @@ async function handleFileSelect(file: File) {
     const extension = file.name.split('.').pop()?.toLowerCase()
 
     let parsedData: ReturnType<typeof parseAss>
+    let actualFormat: 'ass' | 'srt' = 'ass'
+    let actualFilename = file.name
 
     if (extension === 'srt') {
       parsedData = parseSrt(content)
+      // SRT -> ASS conversion: change filename extension
+      actualFilename = file.name.replace(/\.srt$/i, '.ass')
+      srtConversionMessage.value = 'SRT 文件已转换为 ASS 格式以支持样式编辑，导出时将保存为 ASS 文件。'
     } else if (extension === 'ass' || extension === 'ssa') {
       const analysis = analyzeAssStructure(content)
       if (analysis.hasIssues) {
@@ -98,28 +106,21 @@ async function handleFileSelect(file: File) {
     }
 
     const subtitleFile = createSubtitleFile({
-      filename: file.name,
-      format: extension === 'srt' ? 'srt' : 'ass',
+      filename: actualFilename,
+      format: actualFormat,
       items: parsedData.items,
       styles: parsedData.styles,
       scriptInfo: parsedData.scriptInfo,
     })
 
     store.loadFile(subtitleFile)
-    baselineSerializedContent.value =
-      subtitleFile.format === 'srt'
-        ? serializeSrt({
-            items: subtitleFile.items,
-            format: 'srt',
-            filename: subtitleFile.filename,
-          })
-        : serializeAss({
-            items: subtitleFile.items,
-            styles: subtitleFile.styles,
-            scriptInfo: subtitleFile.scriptInfo,
-            format: 'ass',
-            filename: subtitleFile.filename,
-          })
+    baselineSerializedContent.value = serializeAss({
+      items: subtitleFile.items,
+      styles: subtitleFile.styles,
+      scriptInfo: subtitleFile.scriptInfo,
+      format: 'ass',
+      filename: subtitleFile.filename,
+    })
   } catch (error) {
     console.error('Failed to parse file:', error)
     errorMessage.value = '文件解析失败，请检查文件格式是否正确。'
@@ -182,7 +183,7 @@ function handleCloseFile() {
   styleSelectionVisible.value = false
   pendingStyleCandidates.value = []
   pendingNormalizeBaseContent.value = ''
-  currentView.value = 'table'
+  currentView.value = 'styles'
 }
 
 function handleFixAssStructure() {
@@ -248,11 +249,21 @@ function applyStructureNormalization(selectedStyleIds: string[]) {
           @select="handleFileSelect"
         />
         <p class="hint">支持 .ass, .ssa, .srt 格式</p>
+        <p class="format-note">SRT 文件导入后将自动转换为 ASS 格式以支持样式编辑</p>
+        <p class="copyright-note">本工具旨在提升不同设备上字幕的观赏性，而不会修改文件中的其它内容，请尊重译者，避免传播修改后的文件。</p>
         <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
       </div>
 
       <!-- File Info Section -->
       <div v-else class="file-info-section">
+        <!-- SRT conversion notice (no button) -->
+        <div
+          v-if="srtConversionMessage"
+          class="mb-3 rounded-md border border-blue-300 bg-blue-50 px-3 py-2 text-sm text-blue-900"
+        >
+          <span>{{ srtConversionMessage }}</span>
+        </div>
+        <!-- ASS structure warning (with fix button) -->
         <div
           v-if="importWarningMessage"
           class="mb-3 flex items-center justify-between gap-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900"
@@ -435,6 +446,20 @@ function applyStructureNormalization(selectedStyleIds: string[]) {
   margin-top: 1rem;
   color: #666;
   font-size: 0.875rem;
+}
+
+.format-note {
+  margin-top: 0.5rem;
+  color: #1d4ed8;
+  font-size: 0.8rem;
+}
+
+.copyright-note {
+  margin: 0.5rem auto 0;
+  max-width: 42rem;
+  color: #7c2d12;
+  font-size: 0.9rem;
+  line-height: 1.6;
 }
 
 .error {

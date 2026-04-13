@@ -34,6 +34,19 @@ const unsavedDialogVisible = ref(false)
 let pendingAfterUnsavedDecision: (() => void) | null = null
 let bypassUnsavedGuard = false
 const PREVIEW_TEXT = '字幕预览文本\nSubtitle Preview'
+const resolutionX = ref('1920')
+const resolutionY = ref('1080')
+const scaledBorderAndShadow = ref(true)
+const resolutionMessage = ref('')
+const resolutionConfirmVisible = ref(false)
+const pendingResolutionAction = ref<{
+  playResX: number
+  playResY: number
+  scaledBorderAndShadow: boolean
+  resample: boolean
+  styleChanged: number
+  itemChanged: number
+} | null>(null)
 
 // Watch for store styles changes
 const projectStyles = computed(() => {
@@ -253,6 +266,19 @@ watch(
       editorContentRef.value.scrollTop = 0
     }
   }
+)
+
+watch(
+  () => store.currentFile?.scriptInfo,
+  (scriptInfo) => {
+    const playResX = Number.parseInt(scriptInfo?.PlayResX || '', 10)
+    const playResY = Number.parseInt(scriptInfo?.PlayResY || '', 10)
+    resolutionX.value = Number.isFinite(playResX) && playResX > 0 ? String(playResX) : '1920'
+    resolutionY.value = Number.isFinite(playResY) && playResY > 0 ? String(playResY) : '1080'
+    const scaled = (scriptInfo?.ScaledBorderAndShadow || '').toLowerCase()
+    scaledBorderAndShadow.value = scaled ? scaled !== 'no' : true
+  },
+  { immediate: true }
 )
 
 function handleSelect(styleName: string) {
@@ -578,6 +604,68 @@ function handleDiscardAndContinue() {
   }
   executePendingAction()
 }
+
+function applyResolution(resample: boolean) {
+  runWithUnsavedGuard(() => {
+    const nextX = Number.parseInt(resolutionX.value, 10)
+    const nextY = Number.parseInt(resolutionY.value, 10)
+    if (!Number.isFinite(nextX) || nextX <= 0 || !Number.isFinite(nextY) || nextY <= 0) {
+      resolutionMessage.value = '分辨率需为正整数'
+      return
+    }
+
+    const estimate = store.estimateResolutionImpact({
+      playResX: nextX,
+      playResY: nextY,
+      resample,
+    })
+    if (!estimate.ok) {
+      resolutionMessage.value = estimate.reason
+      return
+    }
+
+    pendingResolutionAction.value = {
+      playResX: nextX,
+      playResY: nextY,
+      scaledBorderAndShadow: scaledBorderAndShadow.value,
+      resample,
+      styleChanged: estimate.styleChanged,
+      itemChanged: estimate.itemChanged,
+    }
+    resolutionConfirmVisible.value = true
+  })
+}
+
+function closeResolutionConfirm() {
+  resolutionConfirmVisible.value = false
+  pendingResolutionAction.value = null
+}
+
+function submitResolutionConfirm() {
+  const payload = pendingResolutionAction.value
+  if (!payload) return
+
+  const result = store.updateScriptResolution({
+    playResX: payload.playResX,
+    playResY: payload.playResY,
+    scaledBorderAndShadow: payload.scaledBorderAndShadow,
+    resample: payload.resample,
+  })
+  if (!result.ok) {
+    resolutionMessage.value = result.reason
+    closeResolutionConfirm()
+    return
+  }
+
+    if (selectedStyleName.value) {
+      const selected = store.styles.find(style => style.name === selectedStyleName.value)
+      if (selected) editingStyle.value = { ...selected }
+    }
+    resolutionMessage.value = payload.resample
+      ? `已重采样：样式 ${result.styleChanged} 条，字幕 ${result.itemChanged} 条`
+      : '已更新脚本分辨率'
+  closeResolutionConfirm()
+}
 </script>
 
 <template>
@@ -631,6 +719,27 @@ function handleDiscardAndContinue() {
               >
                 保存
               </button>
+            </div>
+            <div class="resolution-panel">
+              <div class="resolution-row">
+                <label class="resolution-field">
+                  <span>PlayResX</span>
+                  <input v-model="resolutionX" class="resolution-input" type="number" min="1" />
+                </label>
+                <label class="resolution-field">
+                  <span>PlayResY</span>
+                  <input v-model="resolutionY" class="resolution-input" type="number" min="1" />
+                </label>
+                <label class="resolution-toggle">
+                  <input v-model="scaledBorderAndShadow" type="checkbox" />
+                  <span>ScaledBorderAndShadow</span>
+                </label>
+              </div>
+              <div class="resolution-actions">
+                <button class="resolution-btn ghost" @click="applyResolution(false)">仅修改分辨率</button>
+                <button class="resolution-btn primary" @click="applyResolution(true)">重采样到此分辨率</button>
+              </div>
+              <p v-if="resolutionMessage" class="resolution-message">{{ resolutionMessage }}</p>
             </div>
             <StyleForm
               :model-value="currentPreviewStyle"
@@ -712,6 +821,25 @@ function handleDiscardAndContinue() {
       </div>
     </div>
   </div>
+  <div v-if="resolutionConfirmVisible" class="rename-overlay" @click.self="closeResolutionConfirm">
+    <div class="rename-modal">
+      <h4 class="rename-title">{{ pendingResolutionAction?.resample ? '确认重采样分辨率' : '确认修改脚本分辨率' }}</h4>
+      <p class="rename-desc">
+        目标分辨率：{{ pendingResolutionAction?.playResX }} × {{ pendingResolutionAction?.playResY }}，
+        ScaledBorderAndShadow: {{ pendingResolutionAction?.scaledBorderAndShadow ? 'yes' : 'no' }}
+      </p>
+      <p v-if="pendingResolutionAction?.resample" class="resolution-confirm-note">
+        预计影响：样式 {{ pendingResolutionAction?.styleChanged }} 条，字幕 {{ pendingResolutionAction?.itemChanged }} 条
+      </p>
+      <p v-else class="resolution-confirm-note">
+        仅更新脚本分辨率字段，不改写样式与字幕坐标。
+      </p>
+      <div class="rename-actions">
+        <button class="rename-btn ghost" @click="closeResolutionConfirm">取消</button>
+        <button class="rename-btn primary" @click="submitResolutionConfirm">确认应用</button>
+      </div>
+    </div>
+  </div>
 </template>
 
 <style scoped>
@@ -786,6 +914,82 @@ function handleDiscardAndContinue() {
   font-size: 0.75rem;
   font-weight: 600;
   padding: 0.3rem 0.62rem;
+}
+
+.resolution-panel {
+  border: 1px solid #e5e7eb;
+  background: #f8fafc;
+  border-radius: 0.5rem;
+  padding: 0.55rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.resolution-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.resolution-field {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+  color: #4b5563;
+}
+
+.resolution-input {
+  width: 92px;
+  border: 1px solid #d1d5db;
+  border-radius: 0.35rem;
+  padding: 0.2rem 0.35rem;
+  font-size: 0.75rem;
+  color: #111827;
+  background: #fff;
+}
+
+.resolution-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+  color: #4b5563;
+}
+
+.resolution-actions {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.resolution-btn {
+  border: 1px solid #d1d5db;
+  border-radius: 0.45rem;
+  padding: 0.26rem 0.55rem;
+  font-size: 0.72rem;
+  color: #374151;
+  background: #fff;
+}
+
+.resolution-btn.primary {
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #fff;
+}
+
+.resolution-message {
+  margin: 0;
+  font-size: 0.72rem;
+  color: #0369a1;
+}
+
+.resolution-confirm-note {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #374151;
 }
 
 .preview-sidebar {

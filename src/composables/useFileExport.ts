@@ -2,6 +2,29 @@ import { useSubtitleStore } from '../stores/subtitle'
 import { serializeAss } from '../plugins/parser-ass/parser'
 import { serializeSrt } from '../plugins/parser-srt/parser'
 
+function pad(value: number): string {
+  return String(value).padStart(2, '0')
+}
+
+function buildTimestamp(date: Date): string {
+  return `${date.getFullYear()}年${pad(date.getMonth() + 1)}月${pad(date.getDate())}日${pad(date.getHours())}时${pad(date.getMinutes())}分${pad(date.getSeconds())}秒`
+}
+
+function stripExtension(filename: string): string {
+  return filename.replace(/\.[^.]+$/, '')
+}
+
+function sanitizeFilename(filename: string): string {
+  return filename.replace(/[\\/:*?"<>|]/g, '_')
+}
+
+export function buildDefaultExportFilename(originalFilename: string | undefined, format: string, now = new Date()): string {
+  const normalizedFormat = format === 'srt' ? 'srt' : 'ass'
+  const originalBaseName = stripExtension(originalFilename?.trim() || 'subtitle')
+  const safeBaseName = sanitizeFilename(originalBaseName) || 'subtitle'
+  return `Edited_${buildTimestamp(now)}_${safeBaseName}.${normalizedFormat}`
+}
+
 export function useFileExport() {
   const store = useSubtitleStore()
 
@@ -20,12 +43,12 @@ export function useFileExport() {
 
     const link = document.createElement('a')
     link.href = url
-    link.download = filename ?? 'ass.ass'
+    link.download = filename ?? buildDefaultExportFilename(data.filename, format)
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
     URL.revokeObjectURL(url)
   }
 
-  return { exportFile }
+  return { exportFile, buildDefaultExportFilename }
 }
