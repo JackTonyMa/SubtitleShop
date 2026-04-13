@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
 import StyleForm from '../StyleForm.vue'
-import { createAssStyle } from '../../../core/models/AssStyle'
+import { createAssStyle, type AssStyle } from '../../../core/models/AssStyle'
 
 describe('StyleForm', () => {
   it('commits numeric inputs on blur without mangling multi-digit values', async () => {
@@ -19,7 +19,7 @@ describe('StyleForm', () => {
     expect((numberInputs[0].element as HTMLInputElement).value).toBe('10')
     await numberInputs[0].trigger('blur')
 
-    const updates = wrapper.emitted('update:modelValue') || []
+    const updates = wrapper.emitted<AssStyle[]>('update:modelValue') || []
     expect(updates.at(-1)?.[0].fontSize).toBe(10)
   })
 
@@ -51,7 +51,7 @@ describe('StyleForm', () => {
     expect((shadowInput.element as HTMLInputElement).value).toBe('0.82')
     await shadowInput.trigger('blur')
 
-    const updates = wrapper.emitted('update:modelValue') || []
+    const updates = wrapper.emitted<AssStyle[]>('update:modelValue') || []
     expect(updates.some(([value]) => value.fontSize === 12)).toBe(true)
     expect(updates.some(([value]) => value.outline === 1.7)).toBe(true)
     expect(updates.some(([value]) => value.shadow === 0.82)).toBe(true)
@@ -74,7 +74,7 @@ describe('StyleForm', () => {
     await outlineColorInput.setValue('#abcdef')
     await outlineColorInput.trigger('blur')
 
-    const updates = wrapper.emitted('update:modelValue') || []
+    const updates = wrapper.emitted<AssStyle[]>('update:modelValue') || []
     expect(updates.some(([value]) => value.primaryColor === '&H00563412')).toBe(true)
     expect(updates.some(([value]) => value.outlineColor === '&H00EFCDAB')).toBe(true)
   })
@@ -95,7 +95,7 @@ describe('StyleForm', () => {
     await fontInput.setValue('黑体')
     await fontInput.trigger('blur')
 
-    const updates = wrapper.emitted('update:modelValue') || []
+    const updates = wrapper.emitted<AssStyle[]>('update:modelValue') || []
     expect(updates.some(([value]) => value.fontName === 'PingFang SC')).toBe(true)
     expect(updates.some(([value]) => value.fontName === 'SimHei')).toBe(true)
   })
